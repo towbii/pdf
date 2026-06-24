@@ -1,0 +1,38 @@
+# Build output
+cpp/build/
+cpp/.vs/
+
+# Qt generated files
+cpp/src/*.moc
+cpp/src/moc_*.cpp
+cpp/src/qrc_*.cpp
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.vcxproj
+*.sln
+
+# Compiled translation (generated from .ts — keep .ts, ignore .qm)
+cpp/translations/*.qm
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Python (old)
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Temp
+*.tmp
+*.bak
+*.orig
