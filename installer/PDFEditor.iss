@@ -1,8 +1,7 @@
 #define AppName      "PDF Editor"
-#define AppVersion   "1.0.0"
+#define AppVersion   "1.4.8"
 #define AppPublisher "Tobias Wotke"
-; TODO: update this URL after creating your GitHub repo
-#define AppURL       "https://github.com/wotket/pdf-editor"
+#define AppURL       "https://github.com/towbii/pdf"
 #define AppExeName   "PDFEditor.exe"
 #define BuildDir     "..\cpp\build\Release"
 

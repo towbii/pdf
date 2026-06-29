@@ -1228,7 +1228,7 @@ void MainWindow::showAbout() {
     hTitleCol->setSpacing(2);
     auto *hTitle = new QLabel("PDF Editor");
     hTitle->setStyleSheet("font-size: 20px; font-weight: 700; color: white; background: transparent;");
-    auto *hVer = new QLabel("Version 1.4.8");
+    auto *hVer = new QLabel(QString("Version %1").arg(QApplication::applicationVersion()));
     hVer->setStyleSheet("font-size: 13px; color: rgba(255,255,255,0.75); background: transparent;");
     hTitleCol->addWidget(hTitle);
     hTitleCol->addWidget(hVer);

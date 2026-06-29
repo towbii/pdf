@@ -8,6 +8,8 @@
 #include <QPixmap>
 #include <QTranslator>
 #include "MainWindow.h"
+
+static constexpr const char *APP_VERSION = "1.4.8";
 #include "Theme.h"
 
 class AnimatedSplash : public QWidget {
@@ -112,7 +114,7 @@ protected:
         p.drawText(QRect(0, 222, width(), 18), Qt::AlignCenter, m_msg);
 
         // Version
-        p.drawText(QRect(0, 252, width(), 18), Qt::AlignCenter, "Version 1.4.1");
+        p.drawText(QRect(0, 252, width(), 18), Qt::AlignCenter, QString("Version %1").arg(APP_VERSION));
     }
 
 private:
@@ -131,7 +133,7 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("PDFEditor");
     app.setOrganizationName("PDFEditor");
     app.setApplicationDisplayName("PDF Editor");
-    app.setApplicationVersion("1.4.1");
+    app.setApplicationVersion(APP_VERSION);
 
     // Load language translator — default is English ("en").
     // Try the embedded Qt resource first (always available), fall back to

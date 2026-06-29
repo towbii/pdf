@@ -1,6 +1,6 @@
 # PDF Editor
 
-A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF.
+A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF. **Current version: 1.4.8**
 
 ## Download
 
