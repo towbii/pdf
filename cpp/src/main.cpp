@@ -9,7 +9,7 @@
 #include <QTranslator>
 #include "MainWindow.h"
 
-static constexpr const char *APP_VERSION = "1.5.0";
+static constexpr const char *APP_VERSION = "1.5.1";
 #include "Theme.h"
 
 class AnimatedSplash : public QWidget {

@@ -1,5 +1,5 @@
 #define AppName      "PDF Editor"
-#define AppVersion   "1.5.0"
+#define AppVersion   "1.5.1"
 #define AppPublisher "Tobias Wotke"
 #define AppURL       "https://github.com/towbii/pdf"
 #define AppExeName   "PDFEditor.exe"

@@ -596,6 +596,13 @@ void MainWindow::buildToolbar() {
     m_zoomSlider->setFixedWidth(120);
     m_zoomSlider->setToolTip(tr("Zoom (Ctrl+Scroll)"));
     connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int v) {
+        // Magnetic snap: within ±4% of 100 → lock to exactly 100%
+        if (v != 100 && qAbs(v - 100) <= 4) {
+            m_zoomSlider->blockSignals(true);
+            m_zoomSlider->setValue(100);
+            m_zoomSlider->blockSignals(false);
+            v = 100;
+        }
         m_view->setZoom(v / 100.f);
     });
     {
