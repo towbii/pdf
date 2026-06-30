@@ -44,6 +44,11 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QProcess>
+#include <QTabWidget>
+#include <QTreeWidget>
+#include <QIntValidator>
+#include <QPrinter>
+#include <QPrintDialog>
 
 extern "C" {
 #include <mupdf/fitz.h>
@@ -273,17 +278,63 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     m_welcomeWidget = buildWelcomeWidget();
     m_stack->addWidget(m_welcomeWidget);  // index 0
 
-    // Editor (splitter + thumbs + view)
+    // Editor (splitter + left-tabs + view-container)
     m_splitter = new QSplitter(Qt::Horizontal);
     m_splitter->setHandleWidth(1);
+
+    // ── Left panel: Pages tab + Bookmarks tab ──
     m_thumbs = new ThumbnailPanel;
     m_thumbs->setObjectName("thumbPanel");
-    m_splitter->addWidget(m_thumbs);
+    m_bookmarksTree = new QTreeWidget;
+    m_bookmarksTree->setObjectName("bookmarksTree");
+    m_bookmarksTree->setHeaderHidden(true);
+    m_bookmarksTree->setIndentation(14);
+    m_leftTabs = new QTabWidget;
+    m_leftTabs->setObjectName("leftTabs");
+    m_leftTabs->setDocumentMode(true);
+    m_leftTabs->setTabPosition(QTabWidget::South);
+    m_leftTabs->addTab(m_thumbs,         tr("Pages"));
+    m_leftTabs->addTab(m_bookmarksTree,  tr("Bookmarks"));
+    m_splitter->addWidget(m_leftTabs);
+
+    // ── Right panel: view + collapsible search bar ──
     m_view = new PdfView(m_pdf);
-    m_splitter->addWidget(m_view);
+    auto *viewCont = new QWidget;
+    auto *vcLay = new QVBoxLayout(viewCont);
+    vcLay->setContentsMargins(0, 0, 0, 0);
+    vcLay->setSpacing(0);
+    vcLay->addWidget(m_view);
+
+    m_searchBar = new QWidget;
+    m_searchBar->setObjectName("searchBar");
+    m_searchBar->hide();
+    auto *sbLay = new QHBoxLayout(m_searchBar);
+    sbLay->setContentsMargins(8, 4, 8, 4);
+    sbLay->setSpacing(6);
+    sbLay->addWidget(new QLabel(tr("Find:")));
+    m_searchEdit = new QLineEdit;
+    m_searchEdit->setPlaceholderText(tr("Search in document…"));
+    m_searchEdit->setFixedWidth(220);
+    sbLay->addWidget(m_searchEdit);
+    auto *prevBtn = new QPushButton("◀");
+    prevBtn->setFixedWidth(28); prevBtn->setToolTip(tr("Previous (Shift+Enter)"));
+    auto *nextBtn = new QPushButton("▶");
+    nextBtn->setFixedWidth(28); nextBtn->setToolTip(tr("Next (Enter)"));
+    sbLay->addWidget(prevBtn);
+    sbLay->addWidget(nextBtn);
+    m_searchStatus = new QLabel;
+    m_searchStatus->setStyleSheet("color:#888; min-width:70px;");
+    sbLay->addWidget(m_searchStatus);
+    sbLay->addStretch();
+    auto *closeSearch = new QPushButton("✕");
+    closeSearch->setFixedWidth(24);
+    sbLay->addWidget(closeSearch);
+    vcLay->addWidget(m_searchBar);
+    m_splitter->addWidget(viewCont);
+
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
-    m_splitter->setSizes({150, 1});
+    m_splitter->setSizes({160, 1});
     m_stack->addWidget(m_splitter);     // index 1
 
     setCentralWidget(m_stack);
@@ -312,7 +363,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_view,   &PdfView::pageChanged, this, [this](int pg) {
         m_statusPage->setText(tr("Page %1 / %2").arg(pg+1).arg(m_pdf->pageCount()));
         m_thumbs->setCurrentPage(pg);
+        updatePageNav(pg);
     });
+
+    // Search bar signals
+    connect(m_searchEdit, &QLineEdit::textChanged,  this, [this](const QString &q){ searchRun(q); });
+    connect(m_searchEdit, &QLineEdit::returnPressed, this, &MainWindow::searchNext);
+    connect(nextBtn,      &QPushButton::clicked,     this, &MainWindow::searchNext);
+    connect(prevBtn,      &QPushButton::clicked,     this, &MainWindow::searchPrev);
+    connect(closeSearch,  &QPushButton::clicked,     this, &MainWindow::searchHide);
+
+    // Bookmarks: click → scroll to page
+    connect(m_bookmarksTree, &QTreeWidget::itemClicked,
+            this, [this](QTreeWidgetItem *item) {
+        int pg = item->data(0, Qt::UserRole).toInt();
+        if (pg >= 0 && pg < m_pdf->pageCount()) m_view->scrollToPage(pg);
+    });
+
+    // Ctrl+F shortcut (also installed via menu)
+    auto *actFind = new QAction(this);
+    actFind->setShortcut(QKeySequence::Find);
+    addAction(actFind);
+    connect(actFind, &QAction::triggered, this, &MainWindow::searchShow);
     connect(m_view,   &PdfView::zoomChanged, this, [this](float z) {
         int pct = qRound(z * 100);
         // Update slider without re-triggering valueChanged
@@ -397,6 +469,11 @@ void MainWindow::buildMenus() {
         connect(a, &QAction::triggered, this, &MainWindow::saveAs);
         mFile->addAction(a);
     }
+    {
+        auto *a = makeAct("file.print", tr("Print …"), tr("Print PDF"), "Ctrl+P", tr("File"));
+        connect(a, &QAction::triggered, this, &MainWindow::printPdf);
+        mFile->addAction(a);
+    }
     mFile->addSeparator();
     auto *mRecent = mFile->addMenu(tr("Recently Opened"));
     connect(mRecent, &QMenu::aboutToShow, this, [this, mRecent]() {
@@ -445,6 +522,12 @@ void MainWindow::buildMenus() {
         m_actRedo = makeAct("edit.redo", tr("Redo"), tr("Redo action"), "Ctrl+Y", tr("Edit"));
         connect(m_actRedo, &QAction::triggered, this, &MainWindow::redo);
         mEdit->addAction(m_actRedo);
+    }
+    mEdit->addSeparator();
+    {
+        auto *a = makeAct("edit.find", tr("Find …"), tr("Search text in document"), "Ctrl+F", tr("Edit"));
+        connect(a, &QAction::triggered, this, &MainWindow::searchShow);
+        mEdit->addAction(a);
     }
 
     // ── View ──
@@ -508,6 +591,13 @@ void MainWindow::buildMenus() {
         auto *a = makeAct("tools.split", tr("Extract Pages …"),
                           tr("Save page range as a new file"), "", tr("Tools"));
         connect(a, &QAction::triggered, this, &MainWindow::splitPdf);
+        mTools->addAction(a);
+    }
+    mTools->addSeparator();
+    {
+        auto *a = makeAct("tools.insertimage", tr("Insert Image …"),
+                          tr("Place an image on the current page"), "", tr("Tools"));
+        connect(a, &QAction::triggered, this, &MainWindow::insertImageFromFile);
         mTools->addAction(a);
     }
 
@@ -643,6 +733,37 @@ void MainWindow::buildToolbar() {
     {
         QSettings qs("PDFEditor", "PDFEditor");
         m_zoomSlider->setValue(qs.value("view/defaultZoom", 100).toInt());
+    }
+
+    tbTools->addSeparator();
+
+    // ── Page navigation ──
+    {
+        auto *wrap = new QWidget;
+        auto *lay  = new QHBoxLayout(wrap);
+        lay->setContentsMargins(4, 0, 4, 0);
+        lay->setSpacing(4);
+
+        m_pageEdit = new QLineEdit("1");
+        m_pageEdit->setFixedWidth(40);
+        m_pageEdit->setAlignment(Qt::AlignCenter);
+        m_pageEdit->setValidator(new QIntValidator(1, 99999, this));
+        m_pageEdit->setToolTip(tr("Page number — press Enter to jump"));
+
+        m_pageTotalLabel = new QLabel("/ 1");
+        m_pageTotalLabel->setStyleSheet("color:#777;");
+
+        lay->addWidget(new QLabel(tr("Page")));
+        lay->addWidget(m_pageEdit);
+        lay->addWidget(m_pageTotalLabel);
+        tbTools->addWidget(wrap);
+
+        connect(m_pageEdit, &QLineEdit::returnPressed, this, [this]() {
+            bool ok;
+            int pg = m_pageEdit->text().toInt(&ok);
+            if (ok && m_pdf->isOpen())
+                m_view->scrollToPage(qBound(1, pg, m_pdf->pageCount()) - 1);
+        });
     }
 
     tbTools->addSeparator();
@@ -821,6 +942,9 @@ void MainWindow::openFile(const QString &path) {
     updateTitle();
     updateUndoState();
     addRecentFile(path);
+    updatePageNav(0);
+    populateBookmarks();
+    searchHide();
     showEditor();
 }
 
@@ -1429,4 +1553,173 @@ void MainWindow::dropEvent(QDropEvent *ev) {
     // No document open yet — just open the first dropped file normally
     QString first = urls.first().toLocalFile();
     openFile(first);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Page navigation helper
+// ─────────────────────────────────────────────────────────────
+
+void MainWindow::updatePageNav(int pg) {
+    if (m_pageEdit) {
+        m_pageEdit->blockSignals(true);
+        m_pageEdit->setText(QString::number(pg + 1));
+        m_pageEdit->blockSignals(false);
+    }
+    if (m_pageTotalLabel && m_pdf->isOpen())
+        m_pageTotalLabel->setText(QString("/ %1").arg(m_pdf->pageCount()));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Print
+// ─────────────────────────────────────────────────────────────
+
+void MainWindow::printPdf() {
+    if (!m_pdf->isOpen()) return;
+    QPrinter printer(QPrinter::HighResolution);
+    QPrintDialog dlg(&printer, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QPainter painter;
+    if (!painter.begin(&printer)) return;
+
+    int from = printer.fromPage() > 0 ? printer.fromPage() - 1 : 0;
+    int to   = printer.toPage()   > 0 ? printer.toPage()   - 1 : m_pdf->pageCount() - 1;
+    to = qMin(to, m_pdf->pageCount() - 1);
+
+    for (int pg = from; pg <= to; ++pg) {
+        if (pg > from) printer.newPage();
+        QRectF pageRt = printer.pageRect(QPrinter::DevicePixel);
+        float dpi  = static_cast<float>(printer.resolution());
+        QPixmap px = m_pdf->renderPage(pg, dpi / 72.f);
+        painter.drawPixmap(pageRt.toRect(), px);
+    }
+    painter.end();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Search
+// ─────────────────────────────────────────────────────────────
+
+void MainWindow::searchShow() {
+    m_searchBar->show();
+    m_searchEdit->setFocus();
+    m_searchEdit->selectAll();
+}
+
+void MainWindow::searchHide() {
+    m_searchBar->hide();
+    m_searchEdit->clear();
+    m_view->clearSearch();
+    m_searchHits.clear();
+    m_searchCache.clear();
+    m_searchCurHit = -1;
+    m_searchStatus->clear();
+}
+
+void MainWindow::searchRun(const QString &query) {
+    m_searchHits.clear();
+    m_searchCache.clear();
+    m_searchCurHit = -1;
+    m_view->clearSearch();
+
+    if (query.isEmpty() || !m_pdf->isOpen()) {
+        m_searchStatus->clear();
+        return;
+    }
+
+    for (int pg = 0; pg < m_pdf->pageCount(); ++pg) {
+        auto rects = m_pdf->searchText(pg, query);
+        if (!rects.isEmpty()) {
+            m_searchCache[pg] = rects;
+            for (int i = 0; i < rects.size(); ++i)
+                m_searchHits << SearchHit{pg, i};
+        }
+    }
+
+    if (!m_searchHits.isEmpty()) {
+        m_searchCurHit = 0;
+        const auto &h = m_searchHits[0];
+        m_view->setSearchResults(m_searchCache, h.page, h.idx);
+        m_view->scrollToPage(h.page);
+    }
+
+    m_searchStatus->setText(m_searchHits.isEmpty()
+        ? tr("No matches")
+        : tr("1 / %1").arg(m_searchHits.size()));
+}
+
+void MainWindow::searchNext() {
+    if (m_searchHits.isEmpty()) { searchShow(); return; }
+    m_searchCurHit = (m_searchCurHit + 1) % m_searchHits.size();
+    searchGoTo(m_searchCurHit);
+}
+
+void MainWindow::searchPrev() {
+    if (m_searchHits.isEmpty()) return;
+    m_searchCurHit = (m_searchCurHit - 1 + m_searchHits.size()) % m_searchHits.size();
+    searchGoTo(m_searchCurHit);
+}
+
+void MainWindow::searchGoTo(int hitIdx) {
+    if (hitIdx < 0 || hitIdx >= m_searchHits.size()) return;
+    const auto &h = m_searchHits[hitIdx];
+    m_view->setSearchResults(m_searchCache, h.page, h.idx);
+    m_view->scrollToPage(h.page);
+    m_searchStatus->setText(tr("%1 / %2").arg(hitIdx + 1).arg(m_searchHits.size()));
+}
+
+// ─────────────────────────────────────────────────────────────
+// Bookmarks
+// ─────────────────────────────────────────────────────────────
+
+void MainWindow::populateBookmarks() {
+    m_bookmarksTree->clear();
+    if (!m_pdf->isOpen()) return;
+
+    const auto outline = m_pdf->getOutline();
+    if (outline.isEmpty()) {
+        auto *item = new QTreeWidgetItem(m_bookmarksTree);
+        item->setText(0, tr("(No bookmarks)"));
+        item->setFlags(Qt::ItemIsEnabled); // not selectable
+        return;
+    }
+
+    std::function<void(const QVector<PdfDocument::OutlineItem>&, QTreeWidgetItem*)> add;
+    add = [&](const QVector<PdfDocument::OutlineItem> &items, QTreeWidgetItem *parent) {
+        for (const auto &oi : items) {
+            auto *wi = parent ? new QTreeWidgetItem(parent)
+                              : new QTreeWidgetItem(m_bookmarksTree);
+            wi->setText(0, oi.title);
+            wi->setData(0, Qt::UserRole, oi.page);
+            if (oi.page >= 0)
+                wi->setToolTip(0, tr("Page %1").arg(oi.page + 1));
+            if (!oi.children.isEmpty()) add(oi.children, wi);
+        }
+    };
+    add(outline, nullptr);
+    m_bookmarksTree->expandAll();
+}
+
+// ─────────────────────────────────────────────────────────────
+// Insert image from file
+// ─────────────────────────────────────────────────────────────
+
+void MainWindow::insertImageFromFile() {
+    if (!m_pdf->isOpen()) {
+        QMessageBox::information(this, tr("No document"), tr("Open a PDF first."));
+        return;
+    }
+    QString path = QFileDialog::getOpenFileName(
+        this, tr("Insert Image"), {},
+        tr("Images (*.png *.jpg *.jpeg *.bmp *.gif *.webp);;All Files (*)"));
+    if (path.isEmpty()) return;
+    QPixmap px(path);
+    if (px.isNull()) {
+        QMessageBox::warning(this, tr("Error"), tr("Could not load the selected image."));
+        return;
+    }
+    m_view->setSignaturePixmap(px);
+    setActiveTool(Tool::Signature);
+    m_actSignature->setChecked(true);
+    statusBar()->showMessage(tr("Image loaded — click to place, drag to resize"), 3000);
 }

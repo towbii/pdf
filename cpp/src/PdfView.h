@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QPixmap>
 #include <QLineEdit>
+#include <QMap>
 #include "PdfDocument.h"
 
 enum class Tool { Select, Highlight, Pen, Eraser, Text, Signature };
@@ -29,6 +30,11 @@ public:
         m_sigPixmap = px;
         if (m_tool == Tool::Signature) updateSignatureCursor();
     }
+
+    // Search highlight support
+    void setSearchResults(const QMap<int, QVector<QRectF>> &results,
+                          int currentPage, int currentIdxInPage);
+    void clearSearch();
 
     void setHighlightColor(QColor c) { m_hlColor = c; }
     void setPenColor(QColor c)       { m_penColor = c; }
@@ -59,6 +65,9 @@ private:
     float m_zoom = 1.0f;
     Tool  m_tool = Tool::Select;
     QPixmap m_sigPixmap;
+    QMap<int, QVector<QRectF>> m_searchResults;
+    int     m_searchCurPage = -1;
+    int     m_searchCurIdx  = -1;
     QColor m_hlColor  {255, 255, 0};
     QColor m_penColor {0, 0, 0};
     float  m_penWidth = 2.f;

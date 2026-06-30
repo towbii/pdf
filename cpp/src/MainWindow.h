@@ -7,7 +7,12 @@
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QListWidget>
+#include <QLineEdit>
+#include <QTabWidget>
+#include <QTreeWidget>
 #include <QMap>
+#include <QVector>
+#include <QRectF>
 #include "PdfDocument.h"
 #include "PdfView.h"
 #include "ThumbnailPanel.h"
@@ -33,6 +38,10 @@ private:
     ThumbnailPanel *m_thumbs;
     QSplitter      *m_splitter;
 
+    // Left panel
+    QTabWidget  *m_leftTabs      = nullptr;
+    QTreeWidget *m_bookmarksTree = nullptr;
+
     // Welcome screen
     QStackedWidget *m_stack;
     QWidget        *m_welcomeWidget;
@@ -49,10 +58,21 @@ private:
     QLabel *m_statusFile;
 
     // Toolbar
-    QSlider *m_zoomSlider;
-    QLabel  *m_zoomPctLabel     = nullptr;
-    QFrame  *m_penColorSwatch   = nullptr;
-    QFrame  *m_hlColorSwatch    = nullptr;
+    QSlider   *m_zoomSlider;
+    QLabel    *m_zoomPctLabel   = nullptr;
+    QLineEdit *m_pageEdit       = nullptr;
+    QLabel    *m_pageTotalLabel = nullptr;
+    QFrame    *m_penColorSwatch = nullptr;
+    QFrame    *m_hlColorSwatch  = nullptr;
+
+    // Search bar
+    QWidget   *m_searchBar    = nullptr;
+    QLineEdit *m_searchEdit   = nullptr;
+    QLabel    *m_searchStatus = nullptr;
+    struct SearchHit { int page; int idx; };
+    QVector<SearchHit>              m_searchHits;
+    QMap<int, QVector<QRectF>>      m_searchCache;
+    int                             m_searchCurHit = -1;
 
     // Tool actions (checkable)
     QAction *m_actSelect, *m_actHighlight, *m_actPen,
@@ -86,6 +106,7 @@ private:
     void onModified();
     void showEditor();
     void showWelcome();
+    void updatePageNav(int pg);
 
     // File ops
     void openDialog();
@@ -111,6 +132,7 @@ private:
     void splitPdf();
     void addWatermark();
     void insertImageToPage();
+    void insertImageFromFile();
     void openFormFiller();
     void openSignatureDialog();
     void openKeybinds();
@@ -118,6 +140,18 @@ private:
     void registerAsDefaultPdf();
     void toggleThumbs();
     void showAbout();
+    void printPdf();
+
+    // Search
+    void searchShow();
+    void searchHide();
+    void searchRun(const QString &query);
+    void searchNext();
+    void searchPrev();
+    void searchGoTo(int hitIdx);
+
+    // Bookmarks
+    void populateBookmarks();
 
     void setActiveTool(Tool t);
     void setModified(bool m);

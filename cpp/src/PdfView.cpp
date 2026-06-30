@@ -231,6 +231,21 @@ int PdfView::currentPage() const {
     return 0;
 }
 
+void PdfView::setSearchResults(const QMap<int, QVector<QRectF>> &results,
+                               int currentPage, int currentIdxInPage) {
+    m_searchResults   = results;
+    m_searchCurPage   = currentPage;
+    m_searchCurIdx    = currentIdxInPage;
+    for (auto *pw : m_pages) pw->update();
+}
+
+void PdfView::clearSearch() {
+    m_searchResults.clear();
+    m_searchCurPage = -1;
+    m_searchCurIdx  = -1;
+    for (auto *pw : m_pages) pw->update();
+}
+
 void PdfView::wheelEvent(QWheelEvent *ev) {
     if (ev->modifiers() & Qt::ControlModifier) {
         float delta = 0.f;
@@ -358,6 +373,27 @@ void PdfPageWidget::paintEvent(QPaintEvent *) {
         p.fillRect(rect(), Qt::white);
         p.setPen(QColor(180,180,180));
         p.drawRect(rect().adjusted(0,0,-1,-1));
+    }
+
+    // Search result highlights (PDF coords → screen)
+    {
+        auto sit = m_view->m_searchResults.find(m_pageNum);
+        if (sit != m_view->m_searchResults.end()) {
+            p.setPen(Qt::NoPen);
+            for (int i = 0; i < sit->size(); ++i) {
+                const QRectF &r = (*sit)[i];
+                bool cur = (m_pageNum == m_view->m_searchCurPage
+                            && i == m_view->m_searchCurIdx);
+                QRectF sr = toScreen(r.left(), r.top(), r.right(), r.bottom());
+                p.fillRect(sr, cur ? QColor(255, 120, 0, 180) : QColor(255, 220, 0, 140));
+                if (cur) {
+                    p.setPen(QPen(QColor(220, 80, 0), 2));
+                    p.setBrush(Qt::NoBrush);
+                    p.drawRect(sr);
+                    p.setPen(Qt::NoPen);
+                }
+            }
+        }
     }
 
     // Rubber-band text selection (m_selRects stored in PDF space; convert here)

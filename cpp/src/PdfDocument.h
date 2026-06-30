@@ -90,6 +90,17 @@ public:
     // Returns null rect if the page has no text.
     QRectF firstTextRect(int pageNum);
 
+    // Full-text search — returns bounding rects (PDF coords) of all hits on page
+    QVector<QRectF> searchText(int pageNum, const QString &query) const;
+
+    // Document outline (bookmarks / table of contents)
+    struct OutlineItem {
+        QString title;
+        int page = -1;  // 0-based page index, -1 if unknown
+        QVector<OutlineItem> children;
+    };
+    QVector<OutlineItem> getOutline() const;
+
     // PDF tools
     // Merge: appends all pages from each path in 'paths' to current doc
     bool mergeFrom(const QStringList &paths);

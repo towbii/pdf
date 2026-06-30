@@ -1327,3 +1327,53 @@ bool PdfDocument::setFormField(int pageNum, const QString &name, const QString &
     }
     return ok;
 }
+
+// ──────────────────────────────────────────────
+// Search
+// ──────────────────────────────────────────────
+
+QVector<QRectF> PdfDocument::searchText(int pageNum, const QString &query) const {
+    QVector<QRectF> results;
+    if (!m_doc || query.isEmpty()) return results;
+    fz_try(m_ctx) {
+        fz_page *page = fz_load_page(m_ctx, m_doc, pageNum);
+        const int MAX = 500;
+        fz_quad hits[MAX];
+        int n = fz_search_page(m_ctx, page, query.toUtf8().constData(), nullptr, hits, MAX);
+        results.reserve(n);
+        for (int i = 0; i < n; ++i) {
+            fz_rect r = fz_rect_from_quad(hits[i]);
+            results << QRectF(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+        }
+        fz_drop_page(m_ctx, page);
+    } fz_catch(m_ctx) {}
+    return results;
+}
+
+// ──────────────────────────────────────────────
+// Outline (bookmarks / table of contents)
+// ──────────────────────────────────────────────
+
+static void buildOutlineItems(fz_outline *o,
+                              QVector<PdfDocument::OutlineItem> &out) {
+    for (; o; o = o->next) {
+        PdfDocument::OutlineItem item;
+        item.title = o->title ? QString::fromUtf8(o->title) : QStringLiteral("(untitled)");
+        item.page  = o->page.page; // 0-based, -1 if not set
+        buildOutlineItems(o->down, item.children);
+        out << std::move(item);
+    }
+}
+
+QVector<PdfDocument::OutlineItem> PdfDocument::getOutline() const {
+    QVector<OutlineItem> result;
+    if (!m_doc) return result;
+    fz_try(m_ctx) {
+        fz_outline *outline = fz_load_outline(m_ctx, m_doc);
+        if (outline) {
+            buildOutlineItems(outline, result);
+            fz_drop_outline(m_ctx, outline);
+        }
+    } fz_catch(m_ctx) {}
+    return result;
+}

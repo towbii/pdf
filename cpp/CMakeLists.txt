@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Gui PrintSupport)
 
 # ---------- MuPDF ----------
 # Try vcpkg-style find first (package name: unofficial-libmupdf)
@@ -81,7 +81,7 @@ if(DEFINED MUPDF_INCLUDE_DIR)
 endif()
 
 target_link_libraries(PDFEditor PRIVATE
-    Qt6::Core Qt6::Widgets Qt6::Gui
+    Qt6::Core Qt6::Widgets Qt6::Gui Qt6::PrintSupport
     ${MUPDF_TARGET}
 )
 if(WIN32)
