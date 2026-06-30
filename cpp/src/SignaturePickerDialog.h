@@ -4,6 +4,8 @@
 #include <QLabel>
 #include <QString>
 #include <QStringList>
+#include <QByteArray>
+#include <QPixmap>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 
@@ -27,4 +29,13 @@ private:
     void addNewSignature();
     void deleteSelected();
     void importImage(const QString &path);
+
+    // DPAPI helpers — encrypt/decrypt using the current Windows user's key
+    static QByteArray dpEncrypt(const QByteArray &plain);
+    static QByteArray dpDecrypt(const QByteArray &cipher);
+
+    // Save pixmap as encrypted .sig file; returns saved path or empty on error
+    QString saveEncrypted(const QPixmap &px, const QString &destPath);
+    // Load pixmap from encrypted .sig file
+    static QPixmap loadEncrypted(const QString &path);
 };

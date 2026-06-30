@@ -15,6 +15,70 @@
 #include <QPainter>
 #include <QMimeData>
 #include <QUrl>
+#include <QBuffer>
+#ifdef Q_OS_WIN
+#  include <windows.h>
+#  include <wincrypt.h>
+#endif
+
+// ── DPAPI: encrypt/decrypt with the current Windows user's key ─────────────
+// Encrypted files can only be read by the same Windows account on the same
+// machine — protects against disk theft and other-user access.
+
+QByteArray SignaturePickerDialog::dpEncrypt(const QByteArray &plain) {
+#ifdef Q_OS_WIN
+    DATA_BLOB in, out;
+    in.pbData = reinterpret_cast<BYTE*>(const_cast<char*>(plain.constData()));
+    in.cbData = static_cast<DWORD>(plain.size());
+    if (CryptProtectData(&in, nullptr, nullptr, nullptr, nullptr,
+                         CRYPTPROTECT_LOCAL_MACHINE & 0, &out)) {
+        QByteArray result(reinterpret_cast<char*>(out.pbData), out.cbData);
+        LocalFree(out.pbData);
+        return result;
+    }
+#endif
+    return plain; // fallback: store unencrypted if DPAPI unavailable
+}
+
+QByteArray SignaturePickerDialog::dpDecrypt(const QByteArray &cipher) {
+#ifdef Q_OS_WIN
+    DATA_BLOB in, out;
+    in.pbData = reinterpret_cast<BYTE*>(const_cast<char*>(cipher.constData()));
+    in.cbData = static_cast<DWORD>(cipher.size());
+    if (CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, 0, &out)) {
+        QByteArray result(reinterpret_cast<char*>(out.pbData), out.cbData);
+        LocalFree(out.pbData);
+        return result;
+    }
+#endif
+    return cipher; // fallback
+}
+
+QString SignaturePickerDialog::saveEncrypted(const QPixmap &px, const QString &destPath) {
+    QByteArray pngBytes;
+    QBuffer buf(&pngBytes);
+    buf.open(QIODevice::WriteOnly);
+    if (!px.save(&buf, "PNG")) return {};
+    buf.close();
+
+    QByteArray encrypted = dpEncrypt(pngBytes);
+    QFile f(destPath);
+    if (!f.open(QIODevice::WriteOnly)) return {};
+    f.write(encrypted);
+    f.close();
+    return destPath;
+}
+
+QPixmap SignaturePickerDialog::loadEncrypted(const QString &path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return {};
+    QByteArray cipher = f.readAll();
+    f.close();
+    QByteArray plain = dpDecrypt(cipher);
+    QPixmap px;
+    px.loadFromData(plain, "PNG");
+    return px;
+}
 
 SignaturePickerDialog::SignaturePickerDialog(QWidget *parent) : QDialog(parent) {
     setWindowTitle(tr("Select Signature"));
@@ -95,7 +159,7 @@ SignaturePickerDialog::SignaturePickerDialog(QWidget *parent) : QDialog(parent) 
             [this](QListWidgetItem *cur, QListWidgetItem *) {
         if (!cur) { m_preview->setText(tr("No selection")); m_selected.clear(); return; }
         m_selected = cur->data(Qt::UserRole).toString();
-        QPixmap px(m_selected);
+        QPixmap px = loadEncrypted(m_selected);
         if (!px.isNull()) {
             // Fit inside preview area keeping aspect ratio
             QSize maxSz(m_preview->width() - 16, m_preview->minimumHeight() - 16);
@@ -130,13 +194,26 @@ SignaturePickerDialog::SignaturePickerDialog(QWidget *parent) : QDialog(parent) 
 void SignaturePickerDialog::loadSignatures() {
     m_list->clear();
     QDir dir(m_sigsDir);
-    const QStringList files = dir.entryList({"*.png", "*.jpg"}, QDir::Files, QDir::Time);
+
+    // Migrate any legacy plain PNG/JPG files to encrypted .sig format
+    const QStringList legacy = dir.entryList({"*.png", "*.jpg", "*.jpeg"}, QDir::Files);
+    for (const QString &f : legacy) {
+        QString oldPath = m_sigsDir + "/" + f;
+        QString newPath = m_sigsDir + "/" + QFileInfo(f).baseName() + ".sig";
+        if (!QFile::exists(newPath)) {
+            QPixmap px(oldPath);
+            if (!px.isNull()) saveEncrypted(px, newPath);
+        }
+        QFile::remove(oldPath);
+    }
+
+    // Load encrypted .sig files
+    const QStringList files = dir.entryList({"*.sig"}, QDir::Files, QDir::Time);
     for (const QString &f : files) {
         QString path = m_sigsDir + "/" + f;
-        QPixmap px(path);
+        QPixmap px = loadEncrypted(path);
         QIcon icon;
         if (!px.isNull()) {
-            // Large thumbnail so the signature is fully visible
             QPixmap thumb(220, 90);
             thumb.fill(Qt::white);
             QPainter p(&thumb);
@@ -157,10 +234,11 @@ void SignaturePickerDialog::addNewSignature() {
     SignatureDialog dlg(this);
     if (dlg.exec() != QDialog::Accepted || dlg.savedPath().isEmpty()) return;
 
-    // Generate a unique name
-    QString ts = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
-    QString dest = m_sigsDir + "/Signature_" + ts + ".png";
-    QFile::copy(dlg.savedPath(), dest);
+    QString ts   = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+    QString dest = m_sigsDir + "/Signature_" + ts + ".sig";
+    QPixmap px(dlg.savedPath());
+    if (!px.isNull()) saveEncrypted(px, dest);
+    QFile::remove(dlg.savedPath()); // delete unencrypted temp file immediately
 
     loadSignatures();
     // Select the newly added item
@@ -190,8 +268,8 @@ void SignaturePickerDialog::importImage(const QString &path) {
     QPixmap px(path);
     if (px.isNull()) return;
     QString ts   = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
-    QString dest = m_sigsDir + "/Signature_" + ts + ".png";
-    if (!px.save(dest, "PNG")) return;
+    QString dest = m_sigsDir + "/Signature_" + ts + ".sig";
+    if (saveEncrypted(px, dest).isEmpty()) return;
     loadSignatures();
     for (int i = 0; i < m_list->count(); i++) {
         if (m_list->item(i)->data(Qt::UserRole).toString() == dest) {

@@ -86,7 +86,7 @@ target_link_libraries(PDFEditor PRIVATE
 )
 if(WIN32)
     target_link_libraries(PDFEditor PRIVATE
-        User32 Gdi32 Shell32 Advapi32 Comdlg32 Ole32 OleAut32 Winspool)
+        User32 Gdi32 Shell32 Advapi32 Comdlg32 Ole32 OleAut32 Winspool Crypt32)
     qt_generate_deploy_app_script(TARGET PDFEditor
         OUTPUT_SCRIPT deploy_script NO_TRANSLATIONS NO_COMPILER_RUNTIME)
     install(SCRIPT ${deploy_script})
