@@ -34,7 +34,9 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [InstallDelete]
-; Wipe install directory contents before installing so no old files remain
+; Only cleans the install directory (Program Files\PDF Editor).
+; User data in %APPDATA%\PDFEditor\ (signatures, settings, recent files)
+; is NEVER touched — {app} and {userappdata} are completely separate paths.
 Type: filesandordirs; Name: "{app}\platforms"
 Type: filesandordirs; Name: "{app}\imageformats"
 Type: filesandordirs; Name: "{app}\iconengines"
