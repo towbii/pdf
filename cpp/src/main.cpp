@@ -11,6 +11,10 @@
 #include <QDataStream>
 #include <QFile>
 #include "MainWindow.h"
+#ifdef Q_OS_WIN
+#  include <windows.h>
+#  include <shlobj.h>    // SHChangeNotify
+#endif
 
 static constexpr const char *APP_VERSION = "1.5.4";
 #include "Theme.h"
@@ -305,6 +309,10 @@ int main(int argc, char *argv[]) {
             writeIco(icoPath);
             QFile mf(markerPath);
             if (mf.open(QIODevice::WriteOnly)) mf.write(APP_VERSION);
+#ifdef Q_OS_WIN
+            // Notify Windows shell to flush its icon cache for this exe
+            SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+#endif
         }
     }
 
@@ -330,6 +338,25 @@ int main(int argc, char *argv[]) {
     app.processEvents();
 
     win.show();
+
+#ifdef Q_OS_WIN
+    // Force the taskbar button to use our programmatic icon via WM_SETICON.
+    // Qt's setWindowIcon() sets the window-class icon, but Windows taskbar
+    // reads the per-HWND icon set by WM_SETICON.
+    {
+        QIcon appIcon = app.windowIcon();
+        HICON hBig   = appIcon.pixmap(256, 256).toImage()
+                           .scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                           .toHICON();
+        HICON hSmall = appIcon.pixmap(16, 16).toImage()
+                           .scaled(16, 16, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+                           .toHICON();
+        HWND hwnd = reinterpret_cast<HWND>(win.winId());
+        if (hBig)   SendMessage(hwnd, WM_SETICON, ICON_BIG,   reinterpret_cast<LPARAM>(hBig));
+        if (hSmall) SendMessage(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(hSmall));
+    }
+#endif
+
     splash->finish(&win);
 
     if (argc > 1) {
