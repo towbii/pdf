@@ -26,9 +26,49 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesInstallIn64BitMode=x64compatible
+CloseApplications=yes
+CloseApplicationsFilter=PDFEditor.exe
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[InstallDelete]
+; Wipe install directory contents before installing so no old files remain
+Type: filesandordirs; Name: "{app}\platforms"
+Type: filesandordirs; Name: "{app}\imageformats"
+Type: filesandordirs; Name: "{app}\iconengines"
+Type: filesandordirs; Name: "{app}\styles"
+Type: filesandordirs; Name: "{app}\tls"
+Type: filesandordirs; Name: "{app}\networkinformation"
+Type: filesandordirs; Name: "{app}\generic"
+Type: filesandordirs; Name: "{app}\translations"
+Type: files;          Name: "{app}\*.dll"
+Type: files;          Name: "{app}\*.qm"
+
+[Code]
+// Silently uninstall previous version before installing new one.
+// This removes old DLLs and exe cleanly, while keeping user data in AppData.
+procedure CleanPreviousVersion();
+var
+  UninstStr: String;
+  ResultCode: Integer;
+begin
+  if RegQueryStringValue(HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A3F2B8C1-4D5E-4F6A-B7C8-D9E0F1A2B3C4}_is1',
+    'UninstallString', UninstStr) then
+  begin
+    UninstStr := RemoveQuotes(UninstStr);
+    Exec(UninstStr, '/SILENT /NORESTART /SUPPRESSMSGBOXES', '', SW_HIDE,
+         ewWaitUntilTerminated, ResultCode);
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  CleanPreviousVersion();
+  Result := True;
+end;
 
 [Tasks]
 Name: "desktopicon";    Description: "Create a &desktop shortcut";       GroupDescription: "Additional icons:"
