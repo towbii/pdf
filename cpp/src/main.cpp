@@ -7,9 +7,12 @@
 #include <QIcon>
 #include <QPixmap>
 #include <QTranslator>
+#include <QBuffer>
+#include <QDataStream>
+#include <QFile>
 #include "MainWindow.h"
 
-static constexpr const char *APP_VERSION = "1.5.2";
+static constexpr const char *APP_VERSION = "1.5.3";
 #include "Theme.h"
 
 class AnimatedSplash : public QWidget {
@@ -155,7 +158,6 @@ int main(int argc, char *argv[]) {
 
     // App icon — dark navy bg / blue-gradient header / orange edit accent
     {
-        // Build at 256×256; also produce a 64×64 variant for crisp taskbar rendering
         auto buildIcon = [](int sz) -> QPixmap {
             QPixmap pm(sz, sz);
             pm.fill(Qt::transparent);
@@ -260,9 +262,50 @@ int main(int argc, char *argv[]) {
         QIcon icon;
         icon.addPixmap(buildIcon(256));
         icon.addPixmap(buildIcon(64));
+        icon.addPixmap(buildIcon(48));
         icon.addPixmap(buildIcon(32));
         icon.addPixmap(buildIcon(16));
         app.setWindowIcon(icon);
+
+        // Write .ico next to the exe so Windows taskbar/shell picks up the new icon.
+        // Only regenerates when the version string changes.
+        auto writeIco = [&](const QString &path) {
+            const int sizes[] = {256, 64, 48, 32, 16};
+            const int N = 5;
+            QList<QByteArray> pngs;
+            for (int i = 0; i < N; ++i) {
+                QByteArray buf;
+                QBuffer b(&buf);
+                b.open(QIODevice::WriteOnly);
+                buildIcon(sizes[i]).save(&b, "PNG");
+                pngs << buf;
+            }
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly)) return;
+            QDataStream ds(&f);
+            ds.setByteOrder(QDataStream::LittleEndian);
+            ds << quint16(0) << quint16(1) << quint16(N);
+            quint32 ofs = 6 + N * 16;
+            for (int i = 0; i < N; ++i) {
+                quint8 w = (sizes[i] >= 256) ? 0 : static_cast<quint8>(sizes[i]);
+                ds << w << w << quint8(0) << quint8(0)
+                   << quint16(1) << quint16(32)
+                   << quint32(pngs[i].size()) << ofs;
+                ofs += pngs[i].size();
+            }
+            for (const auto &png : pngs) f.write(png);
+        };
+        QString icoPath    = QCoreApplication::applicationDirPath() + "/PDFEditor.ico";
+        QString markerPath = QCoreApplication::applicationDirPath() + "/icon.ver";
+        bool needRegen = true;
+        { QFile mf(markerPath);
+          if (mf.open(QIODevice::ReadOnly))
+              needRegen = (mf.readAll().trimmed() != QByteArray(APP_VERSION)); }
+        if (needRegen) {
+            writeIco(icoPath);
+            QFile mf(markerPath);
+            if (mf.open(QIODevice::WriteOnly)) mf.write(APP_VERSION);
+        }
     }
 
     // Show animated splash FIRST – before any heavy work

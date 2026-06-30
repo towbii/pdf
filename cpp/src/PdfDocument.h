@@ -36,6 +36,7 @@ public:
 
     // Open / save / close
     bool open(const QString &path);
+    bool createNew();   // create an empty in-memory PDF (no file path)
     bool save(const QString &path = {});
     void close();
 

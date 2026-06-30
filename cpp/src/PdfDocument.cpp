@@ -30,6 +30,26 @@ PdfDocument::~PdfDocument() {
 // Open / save / close
 // ──────────────────────────────────────────────
 
+bool PdfDocument::createNew() {
+    close();
+    bool ok = false;
+    fz_try(m_ctx) {
+        pdf_document *pdoc = pdf_create_document(m_ctx);
+        m_pdoc = pdoc;
+        m_doc  = (fz_document*)pdoc;
+        ok = true;
+    } fz_catch(m_ctx) {
+        qWarning() << "PdfDocument::createNew:" << fz_caught_message(m_ctx);
+    }
+    if (ok) {
+        m_filePath.clear();
+        m_history.clear();
+        m_redoStack.clear();
+        m_wordCache.clear();
+    }
+    return ok;
+}
+
 bool PdfDocument::open(const QString &path) {
     close();
     // Read entire file with Qt to release the OS file handle immediately.
@@ -984,11 +1004,7 @@ bool PdfDocument::insertBlankPage(int afterPageNum) {
                 fz_drop_page(m_ctx, (fz_page*)pp);
             }
         }
-        pdf_obj *resources = pdf_add_object(m_ctx, m_pdoc, pdf_new_dict(m_ctx, m_pdoc, 1));
-        fz_buffer *contents = fz_new_buffer(m_ctx, 0);
-        pdf_obj *page = pdf_add_page(m_ctx, m_pdoc, mediabox, 0, resources, contents);
-        fz_drop_buffer(m_ctx, contents);
-        pdf_drop_obj(m_ctx, resources);
+        pdf_obj *page = pdf_add_page(m_ctx, m_pdoc, mediabox, 0, nullptr, nullptr);
         pdf_insert_page(m_ctx, m_pdoc, afterPageNum + 1, page);
         pdf_drop_obj(m_ctx, page);
         ok = true;

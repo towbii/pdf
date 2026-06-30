@@ -720,12 +720,17 @@ void MainWindow::buildToolbar() {
         lay->setContentsMargins(2, 0, 2, 0);
         lay->setSpacing(2);
 
+        // Use QToolButton but override the theme's min-height/padding so they stay compact
         auto makeNavBtn = [](const QString &text, const QString &tip) {
             auto *btn = new QToolButton;
             btn->setText(text);
             btn->setToolTip(tip);
-            btn->setFixedSize(20, 22);
             btn->setAutoRaise(true);
+            btn->setStyleSheet(
+                "QToolButton { padding:1px 4px; min-height:0; min-width:0; font-size:10px; }"
+                "QToolButton:hover   { background:#383838; border-radius:3px; }"
+                "QToolButton:pressed { background:#2A2A2A; }"
+            );
             return btn;
         };
         auto *prevPage = makeNavBtn("◀", tr("Previous page"));
@@ -737,7 +742,7 @@ void MainWindow::buildToolbar() {
         m_pageEdit->setToolTip(tr("Page number — press Enter to jump"));
 
         m_pageTotalLabel = new QLabel("/ 1");
-        m_pageTotalLabel->setStyleSheet("color:#777; margin-right:2px;");
+        m_pageTotalLabel->setStyleSheet("color:#777;");
 
         auto *nextPage = makeNavBtn("▶", tr("Next page"));
 
@@ -745,6 +750,7 @@ void MainWindow::buildToolbar() {
         lay->addWidget(m_pageEdit);
         lay->addWidget(m_pageTotalLabel);
         lay->addWidget(nextPage);
+        wrap->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
         tbTools->addWidget(wrap);
 
         connect(m_pageEdit, &QLineEdit::returnPressed, this, [this]() {
@@ -1531,22 +1537,28 @@ void MainWindow::dropEvent(QDropEvent *ev) {
 
     // ── Images dropped ──
     if (!imgPaths.isEmpty()) {
+        // If no PDF is open, create a new blank document first
         if (!m_pdf->isOpen()) {
-            QMessageBox::information(this, tr("No document open"),
-                tr("Open a PDF first, then drop an image to insert it."));
-            return;
+            if (!m_pdf->createNew()) return;
+            m_view->setDocument(m_pdf);
+            m_thumbs->setDocument(m_pdf);
+            updatePageNav(0);
+            showEditor();
         }
         for (const QString &imgPath : imgPaths) {
             QPixmap px(imgPath);
             if (px.isNull()) continue;
-            auto btn = QMessageBox::question(this, tr("Insert image"),
-                tr("How do you want to insert \"%1\"?").arg(QFileInfo(imgPath).fileName()),
-                tr("New page"), tr("Place on current page"), tr("Cancel"), 0, 2);
-            if (btn == 2) continue;
-            if (btn == 0) {
-                // Insert as new page: create blank page then embed image full-page
-                int after = m_view->currentPage();
-                m_pdf->snapshot();
+
+            int choice = 1; // default: place on current page
+            if (m_pdf->pageCount() > 0) {
+                choice = QMessageBox::question(this, tr("Insert image"),
+                    tr("How do you want to insert \"%1\"?").arg(QFileInfo(imgPath).fileName()),
+                    tr("New page"), tr("Place on current page"), tr("Cancel"), 0, 2);
+                if (choice == 2) continue;
+            }
+
+            if (choice == 0) {
+                int after = (m_pdf->pageCount() > 0) ? m_view->currentPage() : -1;
                 if (!m_pdf->insertBlankPage(after)) continue;
                 int newPg = after + 1;
                 auto sz = m_pdf->pageSize(newPg);
@@ -1555,15 +1567,15 @@ void MainWindow::dropEvent(QDropEvent *ev) {
                 m_view->setDocument(m_pdf);
                 m_thumbs->setDocument(m_pdf);
                 m_view->scrollToPage(newPg);
-                onModified();
             } else {
-                // Place as movable element using signature tool
+                // Place as movable element
                 m_view->setSignaturePixmap(px);
                 setActiveTool(Tool::Signature);
                 m_actSignature->setChecked(true);
                 statusBar()->showMessage(
                     tr("Image loaded — click to place, drag to resize"), 3000);
             }
+            onModified();
         }
         return;
     }
