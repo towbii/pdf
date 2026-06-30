@@ -50,6 +50,7 @@ private:
 
     // Toolbar
     QSlider *m_zoomSlider;
+    QLabel  *m_zoomPctLabel     = nullptr;
     QFrame  *m_penColorSwatch   = nullptr;
     QFrame  *m_hlColorSwatch    = nullptr;
 

@@ -314,10 +314,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         m_thumbs->setCurrentPage(pg);
     });
     connect(m_view,   &PdfView::zoomChanged, this, [this](float z) {
-        m_statusZoom->setText(QString("%1%").arg(qRound(z * 100)));
+        int pct = qRound(z * 100);
+        // Update slider without re-triggering valueChanged
         m_zoomSlider->blockSignals(true);
-        m_zoomSlider->setValue(qRound(z * 100));
+        m_zoomSlider->setValue(pct);
         m_zoomSlider->blockSignals(false);
+        // Update inline label
+        if (m_zoomPctLabel) {
+            m_zoomPctLabel->setText(QString("%1%").arg(pct));
+            m_zoomPctLabel->setStyleSheet(pct == 100
+                ? "color:#CC3232; font-weight:700;"
+                : "color: inherit; font-weight:400;");
+        }
+        m_statusZoom->setText(QString("%1%").arg(pct));
     });
     connect(m_view,   &PdfView::selectionChanged, this, [this](const QString &t) {
         if (!t.isEmpty())
@@ -595,21 +604,46 @@ void MainWindow::buildToolbar() {
     m_zoomSlider->setRange(25, 400);
     m_zoomSlider->setFixedWidth(120);
     m_zoomSlider->setToolTip(tr("Zoom (Ctrl+Scroll)"));
-    connect(m_zoomSlider, &QSlider::valueChanged, this, [this](int v) {
-        // Magnetic snap: within ±4% of 100 → lock to exactly 100%
-        if (v != 100 && qAbs(v - 100) <= 4) {
-            m_zoomSlider->blockSignals(true);
-            m_zoomSlider->setValue(100);
-            m_zoomSlider->blockSignals(false);
-            v = 100;
-        }
-        m_view->setZoom(v / 100.f);
+    tbTools->addWidget(m_zoomSlider);
+
+    // Percentage label right next to the slider
+    m_zoomPctLabel = new QLabel("100%");
+    m_zoomPctLabel->setFixedWidth(46);
+    m_zoomPctLabel->setAlignment(Qt::AlignCenter);
+    m_zoomPctLabel->setObjectName("zoomPctLabel");
+    tbTools->addWidget(m_zoomPctLabel);
+
+    // Helper: update label and highlight when snapped to 100%
+    auto updateZoomLabel = [this](int v) {
+        bool snapped = (v == 100);
+        m_zoomPctLabel->setText(QString("%1%").arg(v));
+        m_zoomPctLabel->setStyleSheet(snapped
+            ? "color:#CC3232; font-weight:700;"   // accent when at 100%
+            : "color: inherit; font-weight:400;");
+    };
+
+    // During drag: snap the zoom VALUE (not the slider) so the page
+    // reflects 100% while the thumb is anywhere in the ±5 zone
+    connect(m_zoomSlider, &QSlider::valueChanged, this, [this, updateZoomLabel](int v) {
+        int effective = (v != 100 && qAbs(v - 100) <= 5) ? 100 : v;
+        updateZoomLabel(effective);
+        m_view->setZoom(effective / 100.f);
     });
+
+    // On release: also snap the slider thumb itself so it sits at 100
+    connect(m_zoomSlider, &QSlider::sliderReleased, this, [this, updateZoomLabel]() {
+        int v = m_zoomSlider->value();
+        if (v != 100 && qAbs(v - 100) <= 5) {
+            m_zoomSlider->setValue(100);   // thumb snaps visually after release
+            updateZoomLabel(100);
+            m_view->setZoom(1.0f);
+        }
+    });
+
     {
         QSettings qs("PDFEditor", "PDFEditor");
         m_zoomSlider->setValue(qs.value("view/defaultZoom", 100).toInt());
     }
-    tbTools->addWidget(m_zoomSlider);
 
     tbTools->addSeparator();
 
