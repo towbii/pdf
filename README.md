@@ -1,12 +1,18 @@
 # PDF Editor
 
-A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF. **Current version: 1.5.1**
+A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF. **Current version: 1.5.2**
 
 ## Download
 
 **[⬇ Download Installer (Windows 10/11, 64-bit)](../../releases/latest)**
 
 Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dependencies — everything is bundled.
+
+> **⚠️ Antivirus warning (false positive)**
+> Windows Defender or your browser may flag the installer as suspicious. This is a **false positive** — the file contains no malware.
+> It happens because the installer is newly published and has not yet built up a download reputation with Microsoft.
+> The application is fully open source — you can review every line of code in this repository.
+> To install anyway: click **More info → Run anyway** in the SmartScreen dialog, or go to **Windows Security → Protection history**, find the entry and choose **Allow**.
 
 ## Features
 
