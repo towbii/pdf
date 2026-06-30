@@ -39,7 +39,7 @@ PdfView::PdfView(PdfDocument *doc, QWidget *parent)
 
     m_zoomTimer = new QTimer(this);
     m_zoomTimer->setSingleShot(true);
-    m_zoomTimer->setInterval(80);
+    m_zoomTimer->setInterval(150);
     connect(m_zoomTimer, &QTimer::timeout, this, [this]() {
         if (m_pendingZoom > 0) applyZoom(m_pendingZoom);
         m_pendingZoom = -1.f;
@@ -78,12 +78,42 @@ void PdfView::buildPages() {
         });
     }
     m_resizeTimer->start();
+    // After layout settles, scroll to first text so zoom starts on content, not margins
+    QTimer::singleShot(80, this, &PdfView::scrollToFirstText);
+}
+
+void PdfView::scrollToFirstText() {
+    if (!m_doc || m_pages.isEmpty()) return;
+    QRectF tr = m_doc->firstTextRect(0);
+    if (tr.isNull()) return;
+
+    // tr is in fitz device space (zoom=1). Convert to screen pixels.
+    int screenY = qRound(tr.top() * m_zoom);
+    int screenX = qRound((tr.left() + tr.right()) * 0.5 * m_zoom);
+
+    // Scroll vertically so the text starts near the top with a small margin
+    int topMargin = qRound(20 * m_zoom);
+    verticalScrollBar()->setValue(qMax(0, screenY - topMargin));
+
+    // Center horizontally on the text block
+    horizontalScrollBar()->setValue(
+        qMax(0, screenX - viewport()->width() / 2));
 }
 
 void PdfView::applyZoom(float zoom) {
+    // Save center before high-quality re-render
+    QScrollBar *hb = horizontalScrollBar();
+    QScrollBar *vb = verticalScrollBar();
+    float docCx = m_zoom > 0.f ? (hb->value() + viewport()->width()  * 0.5f) / m_zoom : 0.f;
+    float docCy = m_zoom > 0.f ? (vb->value() + viewport()->height() * 0.5f) / m_zoom : 0.f;
+
     m_zoom = zoom;
     for (auto *pw : m_pages) pw->reload();
-    m_resizeTimer->start();
+    m_container->adjustSize();
+
+    // Restore center after render (pixel-rounding may shift container size slightly)
+    hb->setValue(qRound(docCx * zoom - viewport()->width()  * 0.5f));
+    vb->setValue(qRound(docCy * zoom - viewport()->height() * 0.5f));
 }
 
 void PdfPageWidget::scalePixmapPreview(float factor) {
@@ -107,8 +137,26 @@ void PdfView::updateContainerGeometry() {
 }
 
 void PdfView::setZoom(float zoom) {
+    // Remember viewport center in document space before changing zoom
+    QScrollBar *hb = horizontalScrollBar();
+    QScrollBar *vb = verticalScrollBar();
+    float prevZoom = m_zoom > 0.f ? m_zoom : 1.f;
+    float docCx = (hb->value() + viewport()->width()  * 0.5f) / prevZoom;
+    float docCy = (vb->value() + viewport()->height() * 0.5f) / prevZoom;
+
+    float factor = zoom / prevZoom;
     m_zoom = zoom;
     emit zoomChanged(zoom);
+
+    // Instant live preview by scaling existing pixmaps (no MuPDF call)
+    for (auto *pw : m_pages) pw->scalePixmapPreview(factor);
+    m_container->adjustSize();
+
+    // Restore center
+    hb->setValue(qRound(docCx * zoom - viewport()->width()  * 0.5f));
+    vb->setValue(qRound(docCy * zoom - viewport()->height() * 0.5f));
+
+    // High-quality re-render fires once the slider is released / idle
     m_pendingZoom = zoom;
     m_zoomTimer->start();
 }

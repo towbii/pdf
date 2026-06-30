@@ -74,6 +74,7 @@ private:
 
     void buildPages();
     void applyZoom(float zoom);
+    void scrollToFirstText();
     void updateSignatureCursor();
     void wheelEvent(QWheelEvent *ev) override;
     friend class PdfPageWidget;

@@ -1,5 +1,5 @@
 #define AppName      "PDF Editor"
-#define AppVersion   "1.4.8"
+#define AppVersion   "1.5.0"
 #define AppPublisher "Tobias Wotke"
 #define AppURL       "https://github.com/towbii/pdf"
 #define AppExeName   "PDFEditor.exe"
@@ -18,7 +18,7 @@ DefaultGroupName={#AppName}
 AllowNoIcons=yes
 LicenseFile=..\LICENSE
 OutputDir=output
-OutputBaseFilename=PDFEditor-v{#AppVersion}-Setup
+OutputBaseFilename=PDFEditor-Setup
 SetupIconFile=..\cpp\src\PDFEditor.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

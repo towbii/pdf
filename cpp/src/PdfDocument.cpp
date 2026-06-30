@@ -1075,6 +1075,28 @@ bool PdfDocument::movePage(int from, int to) {
 // PDF Tools
 // ──────────────────────────────────────────────
 
+QRectF PdfDocument::firstTextRect(int pageNum) {
+    pdf_page *pp = loadPdfPage(pageNum);
+    if (!pp) return {};
+    QRectF result;
+    fz_try(m_ctx) {
+        fz_stext_options opts{};
+        fz_stext_page *stext = fz_new_stext_page_from_page(m_ctx, (fz_page*)pp, &opts);
+        if (stext) {
+            for (fz_stext_block *blk = stext->first_block; blk; blk = blk->next) {
+                if (blk->type == FZ_STEXT_BLOCK_TEXT && blk->u.t.first_line) {
+                    fz_rect r = blk->bbox;
+                    result = QRectF(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+                    break;
+                }
+            }
+            fz_drop_stext_page(m_ctx, stext);
+        }
+    } fz_catch(m_ctx) {}
+    fz_drop_page(m_ctx, (fz_page*)pp);
+    return result;
+}
+
 bool PdfDocument::mergeFrom(const QStringList &paths) {
     if (!m_pdoc) return false;
     snapshot();

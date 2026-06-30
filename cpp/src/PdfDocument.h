@@ -86,6 +86,10 @@ public:
     bool insertBlankPage(int afterPageNum);
     bool movePage(int from, int to);
 
+    // Returns bounding rect (fitz device space) of the first text block on the page.
+    // Returns null rect if the page has no text.
+    QRectF firstTextRect(int pageNum);
+
     // PDF tools
     // Merge: appends all pages from each path in 'paths' to current doc
     bool mergeFrom(const QStringList &paths);
