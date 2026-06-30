@@ -27,6 +27,7 @@ protected:
     void closeEvent(QCloseEvent *ev) override;
     void dragEnterEvent(QDragEnterEvent *ev) override;
     void dropEvent(QDropEvent *ev) override;
+    bool eventFilter(QObject *obj, QEvent *ev) override;
     void keyPressEvent(QKeyEvent *ev) override;
 
 private:

@@ -418,25 +418,14 @@ void PdfPageWidget::paintEvent(QPaintEvent *) {
             p.drawRect(QRectF(r.x()*z, r.y()*z, r.width()*z, r.height()*z));
     }
 
-    // Selected / dragged annotation highlight; show FreeText content during drag
-    if (!m_selAnnotRect.isNull()) {
+    // Body-drag preview (move annotation without handle — show ghost at new position)
+    if (m_resizeBodyDrag) {
         float z = m_view->m_zoom;
-        QRectF sr(m_selAnnotRect.x() * z, m_selAnnotRect.y() * z,
-                  m_selAnnotRect.width() * z, m_selAnnotRect.height() * z);
-        sr = sr.adjusted(-3, -3, 3, 3);
-        p.setBrush(QColor(100, 160, 255, 30));
-        p.setPen(QPen(QColor(80, 140, 240, 200), 1.5, Qt::DashLine));
+        QRectF sr(m_resizeRect.x()*z, m_resizeRect.y()*z,
+                  m_resizeRect.width()*z, m_resizeRect.height()*z);
+        p.setBrush(QColor(100, 160, 255, 25));
+        p.setPen(QPen(QColor(80, 140, 240, 180), 1.5, Qt::DashLine));
         p.drawRect(sr);
-        // Draw text content so the user can see what they are dragging
-        if (m_movingAnnot && !m_selAnnotText.isEmpty()) {
-            p.setPen(QColor(0, 0, 0, 200));
-            QFont f = p.font();
-            f.setPointSizeF(qMax(8.0, m_view->m_fontSize * z * 0.75));
-            p.setFont(f);
-            p.drawText(sr.adjusted(4, 2, -4, -2),
-                       Qt::AlignLeft | Qt::AlignVCenter | Qt::TextWordWrap,
-                       m_selAnnotText);
-        }
     }
 
     // Resize mode: draw bounding box + 8 handles
@@ -546,19 +535,27 @@ QRectF PdfPageWidget::toScreen(float x0, float y0, float x1, float y1) const {
 void PdfPageWidget::mousePressEvent(QMouseEvent *ev) {
     if (ev->button() != Qt::LeftButton) return;
 
-    // Resize mode: handle clicks on handles or outside to exit
+    // Resize mode: handle clicks on handles, body drag, or exit
     if (m_resizeMode) {
         int h = handleAt(ev->pos());
         if (h >= 0) {
-            m_resizeHandle   = h;
-            m_resizeDragging = true;
+            m_resizeHandle    = h;
+            m_resizeDragging  = true;
             m_resizeDragStart = toPdf(ev->pos());
         } else {
-            // Click outside bounding box → commit and exit resize mode
             float z = m_view->m_zoom;
             QRectF sr(m_resizeRect.x()*z, m_resizeRect.y()*z,
                       m_resizeRect.width()*z, m_resizeRect.height()*z);
-            exitResizeMode(!sr.contains(ev->pos()));
+            if (sr.adjusted(-6,-6,6,6).contains(ev->pos())) {
+                // Body drag: move annotation
+                m_resizeBodyDrag  = true;
+                m_resizeBodyStart = toPdf(ev->pos());
+                m_resizeBodyOrig  = m_resizeRect;
+                setCursor(Qt::SizeAllCursor);
+            } else {
+                // Click outside → deselect
+                exitResizeMode(true);
+            }
         }
         return;
     }
@@ -569,29 +566,19 @@ void PdfPageWidget::mousePressEvent(QMouseEvent *ev) {
     switch (m_view->m_tool) {
     case Tool::Select: {
         QPointF pdfPt = toPdf(ev->pos());
-        // Check any annotation first (ink, FreeText, highlight, image)
+        // Check any annotation (ink, FreeText, highlight, image stamp)
         QRectF ar;
         if (doc) ar = doc->annotRectAt(m_pageNum, (float)pdfPt.x(), (float)pdfPt.y());
         if (ar.isNull() && doc)
             ar = doc->freetextRectAt(m_pageNum, (float)pdfPt.x(), (float)pdfPt.y());
         if (!ar.isNull()) {
-            m_selAnnotRect     = ar;
-            m_selAnnotOrigRect = ar;
-            m_annotDragStart   = pdfPt;
-            m_movingAnnot      = false;
+            // Single click → show resize/move handles immediately
+            enterResizeMode(pdfPt, ar);
             m_selRects.clear();
-            // Capture text content for FreeText drag preview
-            m_selAnnotText = doc
-                ? doc->freetextAt(m_pageNum,
-                      float(ar.center().x()), float(ar.center().y()))
-                : QString{};
-            update();
         } else {
-            // clicked empty space — deselect annotation and start text rubber-band
-            m_selAnnotRect = {};
-            m_selAnnotText.clear();
-            m_selStart = ev->pos();
-            m_selEnd   = ev->pos();
+            // Clicked empty space: start rubber-band text selection
+            m_selStart  = ev->pos();
+            m_selEnd    = ev->pos();
             m_selecting = true;
             m_selRects.clear();
             update();
@@ -634,6 +621,18 @@ void PdfPageWidget::mousePressEvent(QMouseEvent *ev) {
 }
 
 void PdfPageWidget::mouseMoveEvent(QMouseEvent *ev) {
+    // Body drag: move annotation by dragging inside the resize rect
+    if (m_resizeBodyDrag) {
+        QPointF cur   = toPdf(ev->pos());
+        QPointF delta = cur - m_resizeBodyStart;
+        m_resizeRect = QRectF(m_resizeBodyOrig.x() + delta.x(),
+                               m_resizeBodyOrig.y() + delta.y(),
+                               m_resizeBodyOrig.width(),
+                               m_resizeBodyOrig.height());
+        update();
+        return;
+    }
+
     // Resize handle drag
     if (m_resizeDragging && m_resizeHandle >= 0) {
         QPointF cur = toPdf(ev->pos());
@@ -655,7 +654,7 @@ void PdfPageWidget::mouseMoveEvent(QMouseEvent *ev) {
         update();
         return;
     }
-    // Update cursor when hovering over handles
+    // Update cursor when hovering in resize mode
     if (m_resizeMode && !(ev->buttons() & Qt::LeftButton)) {
         int h = handleAt(ev->pos());
         static const Qt::CursorShape cs[8] = {
@@ -663,7 +662,14 @@ void PdfPageWidget::mouseMoveEvent(QMouseEvent *ev) {
             Qt::SizeHorCursor,   Qt::SizeHorCursor,
             Qt::SizeBDiagCursor, Qt::SizeVerCursor, Qt::SizeFDiagCursor
         };
-        setCursor(h >= 0 ? cs[h] : Qt::ArrowCursor);
+        if (h >= 0) {
+            setCursor(cs[h]);
+        } else {
+            float z = m_view->m_zoom;
+            QRectF sr(m_resizeRect.x()*z, m_resizeRect.y()*z,
+                      m_resizeRect.width()*z, m_resizeRect.height()*z);
+            setCursor(sr.contains(ev->pos()) ? Qt::SizeAllCursor : Qt::ArrowCursor);
+        }
     }
 
     QPointF pdf = toPdf(ev->pos());
@@ -671,21 +677,7 @@ void PdfPageWidget::mouseMoveEvent(QMouseEvent *ev) {
 
     switch (m_view->m_tool) {
     case Tool::Select:
-        if (!m_selAnnotRect.isNull() && (ev->buttons() & Qt::LeftButton)) {
-            QPointF cur   = toPdf(ev->pos());
-            QPointF delta = cur - m_annotDragStart; // total offset from drag start
-            if (!m_movingAnnot && (qAbs(delta.x()) > 3 || qAbs(delta.y()) > 3))
-                m_movingAnnot = true;
-            if (m_movingAnnot) {
-                // keep m_selAnnotRect as a live preview — offset from the ORIGINAL rect
-                m_selAnnotRect = QRectF(
-                    m_selAnnotOrigRect.x() + delta.x(),
-                    m_selAnnotOrigRect.y() + delta.y(),
-                    m_selAnnotOrigRect.width(),
-                    m_selAnnotOrigRect.height());
-                update();
-            }
-        } else if (m_selecting) {
+        if (m_selecting) {
             m_selEnd = ev->pos();
             m_selRects.clear();
             if (!doc) break;
@@ -760,6 +752,28 @@ void PdfPageWidget::mouseMoveEvent(QMouseEvent *ev) {
 void PdfPageWidget::mouseReleaseEvent(QMouseEvent *ev) {
     if (ev->button() != Qt::LeftButton) return;
 
+    // Body drag release: commit move
+    if (m_resizeBodyDrag) {
+        m_resizeBodyDrag = false;
+        if (m_view->m_doc && m_resizeRect != m_resizeBodyOrig) {
+            float dx = (float)(m_resizeRect.x() - m_resizeBodyOrig.x());
+            float dy = (float)(m_resizeRect.y() - m_resizeBodyOrig.y());
+            float hx = (float)m_resizeAnnotHit.x();
+            float hy = (float)m_resizeAnnotHit.y();
+            if (m_view->m_doc->moveAnnotAt(m_pageNum, hx, hy, dx, dy)) {
+                m_resizeAnnotHit += QPointF(dx, dy);
+                m_resizeOrigRect  = m_resizeRect;
+                reload();
+                emit m_view->modified();
+            } else {
+                m_resizeRect = m_resizeBodyOrig;
+                update();
+            }
+        }
+        setCursor(Qt::ArrowCursor);
+        return;
+    }
+
     // Resize handle release: commit resize
     if (m_resizeDragging) {
         m_resizeDragging = false;
@@ -785,31 +799,13 @@ void PdfPageWidget::mouseReleaseEvent(QMouseEvent *ev) {
 
     switch (m_view->m_tool) {
     case Tool::Select: {
-        if (m_movingAnnot && doc && !m_selAnnotOrigRect.isNull()) {
-            float dx = (float)(m_selAnnotRect.x() - m_selAnnotOrigRect.x());
-            float dy = (float)(m_selAnnotRect.y() - m_selAnnotOrigRect.y());
-            // Try generic move first (handles ink, highlights, etc.), then FreeText fallback
-            float cx = (float)(m_selAnnotOrigRect.x() + m_selAnnotOrigRect.width()  * 0.5f);
-            float cy = (float)(m_selAnnotOrigRect.y() + m_selAnnotOrigRect.height() * 0.5f);
-            bool moved = doc->moveAnnotAt(m_pageNum, cx, cy, dx, dy);
-            if (!moved)
-                moved = doc->moveFreetext(m_pageNum, m_selAnnotOrigRect, dx, dy);
-            if (moved) {
-                m_selAnnotOrigRect = m_selAnnotRect;
-                reload();
-                emit m_view->modified();
-            } else {
-                m_selAnnotRect = m_selAnnotOrigRect;
-                update();
-            }
-        }
-        m_movingAnnot = false;
-        m_selecting   = false;
+        bool wasSelecting = m_selecting;
+        m_selecting = false;
 
-        if (!doc) break;
+        if (!doc || !wasSelecting) break;
 
-        // copy selected PDF text to clipboard when doing rubber-band
-        if (m_selAnnotRect.isNull()) {
+        // Copy selected PDF text to clipboard after rubber-band
+        {
             QPointF p0 = toPdf(m_selStart.toPoint());
             QPointF p1 = toPdf(m_selEnd.toPoint());
             const auto chars = doc->getChars(m_pageNum);
@@ -904,12 +900,9 @@ void PdfPageWidget::mouseReleaseEvent(QMouseEvent *ev) {
 void PdfPageWidget::mouseDoubleClickEvent(QMouseEvent *ev) {
     if (ev->button() != Qt::LeftButton) return;
     if (m_view->m_tool != Tool::Select) return;
-    // Exit resize mode on double-click
-    if (m_resizeMode) { exitResizeMode(true); return; }
-    // double-click on a FreeText annotation — edit it in place
+    // Double-click: exit resize mode and try to edit text annotation
+    if (m_resizeMode) exitResizeMode(true);
     placeText(ev->pos());
-    m_selAnnotRect = {};
-    m_selAnnotOrigRect = {};
 }
 
 void PdfPageWidget::contextMenuEvent(QContextMenuEvent *ev) {

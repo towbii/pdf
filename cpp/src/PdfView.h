@@ -121,12 +121,10 @@ private:
     bool      m_selecting = false;
     QVector<QRectF> m_selRects;
 
-    // FreeText annotation selection / drag
-    QRectF    m_selAnnotRect;     // current (preview) rect while dragging, PDF coords
-    QRectF    m_selAnnotOrigRect; // rect at the start of the drag, for the actual move call
-    QPointF   m_annotDragStart;   // PDF coords where drag began
-    bool      m_movingAnnot = false;
-    QString   m_selAnnotText;     // FreeText content for drag preview
+    // Body-drag inside resize mode (moves annotation without using a handle)
+    bool    m_resizeBodyDrag  = false;
+    QPointF m_resizeBodyStart;   // PDF coords at drag start
+    QRectF  m_resizeBodyOrig;    // resize rect before drag began
 
     // highlight
     QPointF   m_hlStart;

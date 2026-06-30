@@ -4,6 +4,7 @@
 #include "PdfToolDialogs.h"
 #include "Theme.h"
 #include <QApplication>
+#include <QEvent>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QFileDialog>
@@ -523,6 +524,11 @@ void MainWindow::buildMenus() {
         connect(a, &QAction::triggered, this, &MainWindow::zoomFit);
         mView->addAction(a);
     }
+    {
+        auto *a = makeAct("view.zoom100", tr("Zoom 100%"), tr("Zoom 100%"), "Ctrl+1", tr("View"));
+        connect(a, &QAction::triggered, this, &MainWindow::zoomActual);
+        mView->addAction(a);
+    }
     mView->addSeparator();
     {
         auto *a = makeAct("view.thumbs", tr("Page Panel"), tr("Toggle page panel"), "Ctrl+B");
@@ -669,7 +675,8 @@ void MainWindow::buildToolbar() {
     m_zoomSlider = new QSlider(Qt::Horizontal);
     m_zoomSlider->setRange(25, 400);
     m_zoomSlider->setFixedWidth(120);
-    m_zoomSlider->setToolTip(tr("Zoom (Ctrl+Scroll)"));
+    m_zoomSlider->setToolTip(tr("Zoom (Ctrl+Scroll, double-click = 100%)"));
+    m_zoomSlider->installEventFilter(this);
     tbTools->addWidget(m_zoomSlider);
 
     // Percentage label right next to the slider
@@ -1084,6 +1091,14 @@ void MainWindow::zoomFit() {
 void MainWindow::zoomActual() {
     m_view->setZoom(1.f);
     m_zoomSlider->setValue(100);
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *ev) {
+    if (obj == m_zoomSlider && ev->type() == QEvent::MouseButtonDblClick) {
+        zoomActual();
+        return true;
+    }
+    return QMainWindow::eventFilter(obj, ev);
 }
 
 // ─────────────────────────────────────────────────────────────

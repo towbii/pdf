@@ -1,6 +1,6 @@
 # PDF Editor
 
-A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF. **Current version: 1.5.4**
+A fast, open-source PDF editor for Windows — built with C++, Qt 6 and MuPDF. **Current version: 1.5.5**
 
 ## Download
 
@@ -20,28 +20,43 @@ Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dep
 - **Highlight** — drag over text to highlight it; drag over any area for a flat coloured rectangle
 - **Pen** — freehand drawing with colour picker and adjustable stroke width
 - **Eraser** — removes any annotation or ink stroke with a single drag
-- **Text** — click anywhere on the page to insert a text annotation
+- **Text** — click anywhere on the page to insert a text annotation; double-click an existing annotation to edit it
 - **Signatures** — create, save and reuse multiple signatures; drawn with the mouse or imported from a PNG/JPG
+- **Insert image** — insert a PNG/JPG/BMP file as a full-page image or place it on the current page
+
+### Moving and resizing annotations
+Click any annotation or inserted image in **Select mode** to show 8 resize handles:
+- **Drag a handle** — resize the annotation
+- **Drag the body** — move the annotation anywhere on the page
+- **Double-click** — edit the text content (FreeText annotations)
+- **Click elsewhere** — deselect
 
 ### Page management
 - **Rotate, delete, duplicate** pages — annotations and ink are preserved on duplication
 - **Merge PDFs** — drag a PDF onto an open document to append its pages, or use the Merge dialog (also supports drag & drop)
 - **Split / extract pages** — save a subset of pages to a new file
 - **Insert blank page** — right-click in the thumbnail panel
+- **Reorder pages** — drag thumbnails in the sidebar to reorder pages
+
+### Search
+- **Ctrl+F** — search for text across all pages; matches are highlighted in yellow, the current match in orange
+- Navigate results with **Enter** / **Shift+Enter** or the ▲ ▼ buttons
 
 ### Viewing
-- **Real-time zoom slider** — instant live preview while dragging; snaps to 100%
+- **Real-time zoom slider** — instant live preview while dragging; snaps to 100%; **double-click to reset to 100%**
+- **Zoom shortcuts** — `Ctrl+0` fit to window, `Ctrl+1` reset to 100%, `Ctrl++` / `Ctrl+-` zoom in/out
+- **Page navigation** — jump field with ◀ ▶ arrows in the toolbar; updates live while scrolling
 - **Auto-center on zoom** — view stays locked on the same content while zooming in and out
 - **Text-aware scroll** — on open, automatically scrolls to the first line of text (not blank margins)
 - **Page thumbnails** — live sidebar that updates after every edit
-- **Smooth eraser** — no lag when erasing across annotations
 
 ### Other
+- **Print** — `Ctrl+P` prints via the Windows print dialog at full printer resolution
 - **Form filling** — detects and fills PDF form fields
 - **Watermark** — add semi-transparent text watermarks
 - **Undo / Redo** — full history for all edits
 - **Dark and light theme**
-- **Drag & drop** — open PDFs by dropping them onto the window; drop PNGs into the signature picker to import
+- **Drag & drop** — open PDFs or images by dropping them onto the window; if no PDF is open, a new document is created automatically
 - **Register as Windows default PDF viewer**
 - **Customisable keyboard shortcuts** (Settings → Keyboard Shortcuts)
 
@@ -60,7 +75,11 @@ Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dep
 | `Ctrl+Y` | Redo |
 | `Ctrl+O` | Open file |
 | `Ctrl+S` | Save |
+| `Ctrl+P` | Print |
+| `Ctrl+F` | Search |
 | `Ctrl+scroll` | Zoom |
+| `Ctrl+0` | Fit to window |
+| `Ctrl+1` | Zoom 100% |
 | `Ctrl+[` / `Ctrl+]` | Rotate page |
 
 All shortcuts can be changed in **Settings → Keyboard Shortcuts**.
