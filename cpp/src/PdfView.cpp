@@ -51,6 +51,15 @@ PdfView::PdfView(PdfDocument *doc, QWidget *parent)
     m_resizeTimer->setSingleShot(true);
     m_resizeTimer->setInterval(60);
     connect(m_resizeTimer, &QTimer::timeout, m_container, &QWidget::adjustSize);
+
+    // Emit pageChanged whenever the visible page changes while scrolling
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() {
+        int pg = currentPage();
+        if (pg != m_lastEmittedPage) {
+            m_lastEmittedPage = pg;
+            emit pageChanged(pg);
+        }
+    });
 }
 
 void PdfView::setDocument(PdfDocument *doc) {
@@ -219,8 +228,12 @@ void PdfView::refreshPage(int pageNum) {
 }
 
 void PdfView::scrollToPage(int pageNum) {
-    if (pageNum >= 0 && pageNum < m_pages.size())
-        ensureWidgetVisible(m_pages[pageNum]);
+    if (pageNum < 0 || pageNum >= m_pages.size()) return;
+    ensureWidgetVisible(m_pages[pageNum]);
+    if (pageNum != m_lastEmittedPage) {
+        m_lastEmittedPage = pageNum;
+        emit pageChanged(pageNum);
+    }
 }
 
 int PdfView::currentPage() const {

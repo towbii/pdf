@@ -80,6 +80,7 @@ private:
     QTimer *m_zoomTimer    = nullptr;
     QTimer *m_resizeTimer  = nullptr;
     float   m_pendingZoom  = -1.f;
+    int     m_lastEmittedPage = -1;
 
     void buildPages();
     void applyZoom(float zoom);
