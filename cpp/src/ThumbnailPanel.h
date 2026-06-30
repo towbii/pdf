@@ -62,15 +62,19 @@ private:
     int           m_pumpIdx   = 0;
 
     // drag-and-drop state
-    int  m_dragFrom         = -1;
-    int  m_dropIndicatorPos = -1;  // index position to show indicator (-1 = none)
-    QWidget *m_dropLine     = nullptr;
+    int     m_dragFrom         = -1;
+    int     m_dropIndicatorPos = -1;
+    QPoint  m_dragMousePos;          // last viewport mouse pos during drag
+    int     m_scrollDir        = 0;  // -1 up, 0 none, +1 down
+    QTimer *m_scrollTimer      = nullptr;
+    QWidget *m_dropLine        = nullptr;
 
     void buildItems();
     void pumpNext();
     void beginDrag(int fromPage, QPoint globalPos);
     void updateDragIndicator(int dropPos);
     void endDrag(int dropPos);
+    int  dropPosAt(QPoint viewportPt) const;
 
     bool eventFilter(QObject *obj, QEvent *ev) override;
 

@@ -137,6 +137,14 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QScrollArea(parent) {
 
     // Handle mouse events on the viewport for drag tracking
     viewport()->installEventFilter(this);
+
+    // Timer-based auto-scroll during drag (fires every 20ms while near edge)
+    m_scrollTimer = new QTimer(this);
+    m_scrollTimer->setInterval(20);
+    connect(m_scrollTimer, &QTimer::timeout, this, [this]() {
+        verticalScrollBar()->setValue(verticalScrollBar()->value() + m_scrollDir * 10);
+        updateDragIndicator(dropPosAt(m_dragMousePos));
+    });
 }
 
 void ThumbnailPanel::setDocument(PdfDocument *doc) {
@@ -217,34 +225,35 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *ev) {
 
 // ── Drag handling ────────────────────────────────────────
 
+int ThumbnailPanel::dropPosAt(QPoint viewportPt) const {
+    QPoint c = m_container->mapFrom(viewport(), viewportPt);
+    for (int i = 0; i < m_items.size(); ++i)
+        if (c.y() < m_items[i]->geometry().center().y()) return i;
+    return m_items.size();
+}
+
 void ThumbnailPanel::beginDrag(int fromPage, QPoint /*globalPos*/) {
     if (m_items.isEmpty() || fromPage < 0 || fromPage >= m_items.size()) return;
-    m_dragFrom = fromPage;
-    m_dropIndicatorPos = fromPage;
-    // Dim the dragged item with stylesheet (setWindowOpacity only works on top-level)
+    m_dragFrom         = fromPage;
+    m_dropIndicatorPos = -1;
+    m_dragMousePos     = {};
+    m_scrollDir        = 0;
     m_items[fromPage]->setStyleSheet(
-        "background: #1a1a1a; border-radius: 8px; opacity: 0.4;");
-    m_items[fromPage]->update();
-    // Grab mouse so all move/release events reach the viewport eventFilter
-    // even when the cursor is over child ThumbnailItem widgets
+        "background: #1a1a1a; border-radius: 8px;");
     viewport()->grabMouse();
     setCursor(Qt::ClosedHandCursor);
 }
 
 void ThumbnailPanel::updateDragIndicator(int dropPos) {
-    if (dropPos == m_dropIndicatorPos) return;
     m_dropIndicatorPos = dropPos;
-
-    // Position the indicator line above item[dropPos], or below the last item
     if (m_items.isEmpty()) { m_dropLine->hide(); return; }
 
-    int targetIdx = qBound(0, dropPos, m_items.size());
-    int lineY = 0;
-    if (targetIdx < m_items.size()) {
-        lineY = m_items[targetIdx]->pos().y() - 3;
-    } else {
+    int lineY;
+    if (dropPos < m_items.size())
+        lineY = m_items[dropPos]->pos().y() - 3;
+    else
         lineY = m_items.last()->pos().y() + m_items.last()->height() + 1;
-    }
+
     m_dropLine->setGeometry(THUMB_MARGIN, lineY,
                             m_container->width() - THUMB_MARGIN * 2, 3);
     m_dropLine->show();
@@ -252,6 +261,8 @@ void ThumbnailPanel::updateDragIndicator(int dropPos) {
 }
 
 void ThumbnailPanel::endDrag(int dropPos) {
+    m_scrollTimer->stop();
+    m_scrollDir = 0;
     m_dropLine->hide();
     viewport()->releaseMouse();
     unsetCursor();
@@ -308,27 +319,23 @@ bool ThumbnailPanel::eventFilter(QObject *obj, QEvent *ev) {
         }
     }
     if (obj == viewport() && m_dragFrom >= 0) {
-        auto dropPosAt = [this](QPoint viewportPt) {
-            QPoint inContainer = m_container->mapFrom(viewport(), viewportPt);
-            int pos = m_items.size();
-            for (int i = 0; i < m_items.size(); ++i) {
-                if (inContainer.y() < m_items[i]->geometry().center().y()) {
-                    pos = i; break;
-                }
-            }
-            return pos;
-        };
-
         if (ev->type() == QEvent::MouseMove) {
             auto *me = static_cast<QMouseEvent*>(ev);
-            // Auto-scroll when dragging near top or bottom edge
-            const int SCROLL_ZONE = 30;
-            QScrollBar *vb = verticalScrollBar();
+            m_dragMousePos = me->pos();
+
+            // Timer-based auto-scroll near edges
+            const int ZONE = 40;
             int y = me->pos().y();
-            if (y < SCROLL_ZONE)
-                vb->setValue(vb->value() - 8);
-            else if (y > viewport()->height() - SCROLL_ZONE)
-                vb->setValue(vb->value() + 8);
+            if (y < ZONE) {
+                m_scrollDir = -1;
+                if (!m_scrollTimer->isActive()) m_scrollTimer->start();
+            } else if (y > viewport()->height() - ZONE) {
+                m_scrollDir = 1;
+                if (!m_scrollTimer->isActive()) m_scrollTimer->start();
+            } else {
+                m_scrollDir = 0;
+                m_scrollTimer->stop();
+            }
 
             updateDragIndicator(dropPosAt(me->pos()));
             return true;
