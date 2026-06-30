@@ -65,6 +65,22 @@ Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dep
 
 All shortcuts can be changed in **Settings → Keyboard Shortcuts**.
 
+## Uninstall
+
+Go to **Windows Settings → Apps → PDF Editor → Uninstall**, or open the **Start menu → PDF Editor → Uninstall PDF Editor**.
+
+The uninstaller removes the program files (`Program Files\PDF Editor`) but **leaves your personal data untouched**:
+
+| Kept | Removed |
+|------|---------|
+| Signatures | PDFEditor.exe and all DLLs |
+| Settings (theme, shortcuts, …) | Qt plugins and translations |
+| Recent file list | Desktop / Start menu shortcuts |
+
+Your data lives in `%APPDATA%\PDFEditor\` and is never touched by the uninstaller.
+
+**Updating** works the same way — the new installer silently removes the old version first, then installs fresh. Your settings and signatures are preserved automatically.
+
 ## Contributing
 
 Pull requests are welcome. Please open an issue first for larger changes so we can discuss the approach.
