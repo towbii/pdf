@@ -1264,7 +1264,7 @@ void MainWindow::showAbout() {
         cl->addLayout(row);
     };
 
-    addRow(tr("Created by"),    "Tobias Wotke");
+    addRow(tr("Created by"),    "towbii");
     addRow(tr("Build Date"),    QString(__DATE__));
     addRow(tr("Qt Version"),    QT_VERSION_STR);
     addRow(tr("MuPDF Version"), FZ_VERSION);

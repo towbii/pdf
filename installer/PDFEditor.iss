@@ -1,6 +1,6 @@
 #define AppName      "PDF Editor"
 #define AppVersion   "1.5.1"
-#define AppPublisher "Tobias Wotke"
+#define AppPublisher "towbii"
 #define AppURL       "https://github.com/towbii/pdf"
 #define AppExeName   "PDFEditor.exe"
 #define BuildDir     "..\cpp\build\Release"
