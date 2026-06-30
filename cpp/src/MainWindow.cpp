@@ -44,8 +44,6 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QProcess>
-#include <QTabWidget>
-#include <QTreeWidget>
 #include <QIntValidator>
 #include <QPrinter>
 #include <QPrintDialog>
@@ -278,24 +276,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     m_welcomeWidget = buildWelcomeWidget();
     m_stack->addWidget(m_welcomeWidget);  // index 0
 
-    // Editor (splitter + left-tabs + view-container)
+    // Editor (splitter + thumbs + view-container)
     m_splitter = new QSplitter(Qt::Horizontal);
     m_splitter->setHandleWidth(1);
 
-    // ── Left panel: Pages tab + Bookmarks tab ──
     m_thumbs = new ThumbnailPanel;
     m_thumbs->setObjectName("thumbPanel");
-    m_bookmarksTree = new QTreeWidget;
-    m_bookmarksTree->setObjectName("bookmarksTree");
-    m_bookmarksTree->setHeaderHidden(true);
-    m_bookmarksTree->setIndentation(14);
-    m_leftTabs = new QTabWidget;
-    m_leftTabs->setObjectName("leftTabs");
-    m_leftTabs->setDocumentMode(true);
-    m_leftTabs->setTabPosition(QTabWidget::South);
-    m_leftTabs->addTab(m_thumbs,         tr("Pages"));
-    m_leftTabs->addTab(m_bookmarksTree,  tr("Bookmarks"));
-    m_splitter->addWidget(m_leftTabs);
+    m_splitter->addWidget(m_thumbs);
 
     // ── Right panel: view + collapsible search bar ──
     m_view = new PdfView(m_pdf);
@@ -334,7 +321,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     m_splitter->setStretchFactor(0, 0);
     m_splitter->setStretchFactor(1, 1);
-    m_splitter->setSizes({160, 1});
+    m_splitter->setSizes({150, 1});
     m_stack->addWidget(m_splitter);     // index 1
 
     setCentralWidget(m_stack);
@@ -373,18 +360,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(prevBtn,      &QPushButton::clicked,     this, &MainWindow::searchPrev);
     connect(closeSearch,  &QPushButton::clicked,     this, &MainWindow::searchHide);
 
-    // Bookmarks: click → scroll to page
-    connect(m_bookmarksTree, &QTreeWidget::itemClicked,
-            this, [this](QTreeWidgetItem *item) {
-        int pg = item->data(0, Qt::UserRole).toInt();
-        if (pg >= 0 && pg < m_pdf->pageCount()) m_view->scrollToPage(pg);
-    });
-
-    // Ctrl+F shortcut (also installed via menu)
-    auto *actFind = new QAction(this);
-    actFind->setShortcut(QKeySequence::Find);
-    addAction(actFind);
-    connect(actFind, &QAction::triggered, this, &MainWindow::searchShow);
     connect(m_view,   &PdfView::zoomChanged, this, [this](float z) {
         int pct = qRound(z * 100);
         // Update slider without re-triggering valueChanged
@@ -742,10 +717,15 @@ void MainWindow::buildToolbar() {
         auto *wrap = new QWidget;
         auto *lay  = new QHBoxLayout(wrap);
         lay->setContentsMargins(4, 0, 4, 0);
-        lay->setSpacing(4);
+        lay->setSpacing(2);
+
+        auto *prevPage = new QPushButton("◀");
+        prevPage->setFixedSize(24, 24);
+        prevPage->setToolTip(tr("Previous page"));
+        prevPage->setFlat(true);
 
         m_pageEdit = new QLineEdit("1");
-        m_pageEdit->setFixedWidth(40);
+        m_pageEdit->setFixedWidth(38);
         m_pageEdit->setAlignment(Qt::AlignCenter);
         m_pageEdit->setValidator(new QIntValidator(1, 99999, this));
         m_pageEdit->setToolTip(tr("Page number — press Enter to jump"));
@@ -753,9 +733,15 @@ void MainWindow::buildToolbar() {
         m_pageTotalLabel = new QLabel("/ 1");
         m_pageTotalLabel->setStyleSheet("color:#777;");
 
-        lay->addWidget(new QLabel(tr("Page")));
+        auto *nextPage = new QPushButton("▶");
+        nextPage->setFixedSize(24, 24);
+        nextPage->setToolTip(tr("Next page"));
+        nextPage->setFlat(true);
+
+        lay->addWidget(prevPage);
         lay->addWidget(m_pageEdit);
         lay->addWidget(m_pageTotalLabel);
+        lay->addWidget(nextPage);
         tbTools->addWidget(wrap);
 
         connect(m_pageEdit, &QLineEdit::returnPressed, this, [this]() {
@@ -763,6 +749,14 @@ void MainWindow::buildToolbar() {
             int pg = m_pageEdit->text().toInt(&ok);
             if (ok && m_pdf->isOpen())
                 m_view->scrollToPage(qBound(1, pg, m_pdf->pageCount()) - 1);
+        });
+        connect(prevPage, &QPushButton::clicked, this, [this]() {
+            if (m_pdf->isOpen())
+                m_view->scrollToPage(qMax(0, m_view->currentPage() - 1));
+        });
+        connect(nextPage, &QPushButton::clicked, this, [this]() {
+            if (m_pdf->isOpen())
+                m_view->scrollToPage(qMin(m_pdf->pageCount() - 1, m_view->currentPage() + 1));
         });
     }
 
@@ -943,7 +937,6 @@ void MainWindow::openFile(const QString &path) {
     updateUndoState();
     addRecentFile(path);
     updatePageNav(0);
-    populateBookmarks();
     searchHide();
     showEditor();
 }
@@ -1523,14 +1516,56 @@ void MainWindow::dropEvent(QDropEvent *ev) {
     const auto urls = ev->mimeData()->urls();
     if (urls.isEmpty()) return;
 
-    // Collect PDF paths from the drop
-    QStringList pdfPaths;
+    // Separate PDFs from images
+    QStringList pdfPaths, imgPaths;
+    static const QStringList imgExts = {"png","jpg","jpeg","bmp","gif","webp","tiff","tif"};
     for (const QUrl &u : urls) {
         QString path = u.toLocalFile();
-        if (path.toLower().endsWith(".pdf")) pdfPaths << path;
+        QString ext  = QFileInfo(path).suffix().toLower();
+        if (ext == "pdf")           pdfPaths << path;
+        else if (imgExts.contains(ext)) imgPaths << path;
     }
 
-    // If a document is already open and PDFs were dropped, offer to merge
+    // ── Images dropped ──
+    if (!imgPaths.isEmpty()) {
+        if (!m_pdf->isOpen()) {
+            QMessageBox::information(this, tr("No document open"),
+                tr("Open a PDF first, then drop an image to insert it."));
+            return;
+        }
+        for (const QString &imgPath : imgPaths) {
+            QPixmap px(imgPath);
+            if (px.isNull()) continue;
+            auto btn = QMessageBox::question(this, tr("Insert image"),
+                tr("How do you want to insert \"%1\"?").arg(QFileInfo(imgPath).fileName()),
+                tr("New page"), tr("Place on current page"), tr("Cancel"), 0, 2);
+            if (btn == 2) continue;
+            if (btn == 0) {
+                // Insert as new page: create blank page then embed image full-page
+                int after = m_view->currentPage();
+                m_pdf->snapshot();
+                if (!m_pdf->insertBlankPage(after)) continue;
+                int newPg = after + 1;
+                auto sz = m_pdf->pageSize(newPg);
+                m_pdf->insertImage(newPg, imgPath, sz.width/2.f, sz.height/2.f,
+                                   sz.width, sz.height);
+                m_view->setDocument(m_pdf);
+                m_thumbs->setDocument(m_pdf);
+                m_view->scrollToPage(newPg);
+                onModified();
+            } else {
+                // Place as movable element using signature tool
+                m_view->setSignaturePixmap(px);
+                setActiveTool(Tool::Signature);
+                m_actSignature->setChecked(true);
+                statusBar()->showMessage(
+                    tr("Image loaded — click to place, drag to resize"), 3000);
+            }
+        }
+        return;
+    }
+
+    // ── PDFs dropped ──
     if (m_pdf->isOpen() && !pdfPaths.isEmpty()) {
         auto btn = QMessageBox::question(this, tr("PDF dropped"),
             tr("A PDF is already open.\n\nAppend the dropped file(s) to the current document, or open as a new document?"),
@@ -1544,15 +1579,17 @@ void MainWindow::dropEvent(QDropEvent *ev) {
             onModified();
             return;
         }
-        // "Open new" → launch a separate instance so each window is independent
         for (const QString &path : pdfPaths)
             QProcess::startDetached(QApplication::applicationFilePath(), {path});
         return;
     }
 
-    // No document open yet — just open the first dropped file normally
-    QString first = urls.first().toLocalFile();
-    openFile(first);
+    // No document open yet — open first dropped file
+    if (!pdfPaths.isEmpty())
+        openFile(pdfPaths.first());
+    else if (!imgPaths.isEmpty())
+        QMessageBox::information(this, tr("No document open"),
+            tr("Open a PDF first, then drop an image to insert it."));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1668,37 +1705,6 @@ void MainWindow::searchGoTo(int hitIdx) {
     m_searchStatus->setText(tr("%1 / %2").arg(hitIdx + 1).arg(m_searchHits.size()));
 }
 
-// ─────────────────────────────────────────────────────────────
-// Bookmarks
-// ─────────────────────────────────────────────────────────────
-
-void MainWindow::populateBookmarks() {
-    m_bookmarksTree->clear();
-    if (!m_pdf->isOpen()) return;
-
-    const auto outline = m_pdf->getOutline();
-    if (outline.isEmpty()) {
-        auto *item = new QTreeWidgetItem(m_bookmarksTree);
-        item->setText(0, tr("(No bookmarks)"));
-        item->setFlags(Qt::ItemIsEnabled); // not selectable
-        return;
-    }
-
-    std::function<void(const QVector<PdfDocument::OutlineItem>&, QTreeWidgetItem*)> add;
-    add = [&](const QVector<PdfDocument::OutlineItem> &items, QTreeWidgetItem *parent) {
-        for (const auto &oi : items) {
-            auto *wi = parent ? new QTreeWidgetItem(parent)
-                              : new QTreeWidgetItem(m_bookmarksTree);
-            wi->setText(0, oi.title);
-            wi->setData(0, Qt::UserRole, oi.page);
-            if (oi.page >= 0)
-                wi->setToolTip(0, tr("Page %1").arg(oi.page + 1));
-            if (!oi.children.isEmpty()) add(oi.children, wi);
-        }
-    };
-    add(outline, nullptr);
-    m_bookmarksTree->expandAll();
-}
 
 // ─────────────────────────────────────────────────────────────
 // Insert image from file

@@ -8,8 +8,6 @@
 #include <QStackedWidget>
 #include <QListWidget>
 #include <QLineEdit>
-#include <QTabWidget>
-#include <QTreeWidget>
 #include <QMap>
 #include <QVector>
 #include <QRectF>
@@ -37,10 +35,6 @@ private:
     PdfView        *m_view;
     ThumbnailPanel *m_thumbs;
     QSplitter      *m_splitter;
-
-    // Left panel
-    QTabWidget  *m_leftTabs      = nullptr;
-    QTreeWidget *m_bookmarksTree = nullptr;
 
     // Welcome screen
     QStackedWidget *m_stack;
@@ -149,9 +143,6 @@ private:
     void searchNext();
     void searchPrev();
     void searchGoTo(int hitIdx);
-
-    // Bookmarks
-    void populateBookmarks();
 
     void setActiveTool(Tool t);
     void setModified(bool m);
