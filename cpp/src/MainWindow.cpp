@@ -1379,10 +1379,13 @@ void MainWindow::dropEvent(QDropEvent *ev) {
             onModified();
             return;
         }
-        // else fall through → open as new
+        // "Open new" → launch a separate instance so each window is independent
+        for (const QString &path : pdfPaths)
+            QProcess::startDetached(QApplication::applicationFilePath(), {path});
+        return;
     }
 
-    // Open first dropped file (non-PDF or "open new" chosen)
+    // No document open yet — just open the first dropped file normally
     QString first = urls.first().toLocalFile();
     openFile(first);
 }
