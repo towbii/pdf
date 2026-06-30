@@ -625,7 +625,7 @@ void MainWindow::buildToolbar() {
     // During drag: snap the zoom VALUE (not the slider) so the page
     // reflects 100% while the thumb is anywhere in the ±5 zone
     connect(m_zoomSlider, &QSlider::valueChanged, this, [this, updateZoomLabel](int v) {
-        int effective = (v != 100 && qAbs(v - 100) <= 5) ? 100 : v;
+        int effective = (v != 100 && qAbs(v - 100) <= 12) ? 100 : v;
         updateZoomLabel(effective);
         m_view->setZoom(effective / 100.f);
     });
@@ -633,7 +633,7 @@ void MainWindow::buildToolbar() {
     // On release: also snap the slider thumb itself so it sits at 100
     connect(m_zoomSlider, &QSlider::sliderReleased, this, [this, updateZoomLabel]() {
         int v = m_zoomSlider->value();
-        if (v != 100 && qAbs(v - 100) <= 5) {
+        if (v != 100 && qAbs(v - 100) <= 12) {
             m_zoomSlider->setValue(100);   // thumb snaps visually after release
             updateZoomLabel(100);
             m_view->setZoom(1.0f);
