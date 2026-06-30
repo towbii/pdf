@@ -1488,8 +1488,15 @@ void MainWindow::setModified(bool m) {
 
 void MainWindow::onModified() {
     setModified(true);
-    if (m_pdf && m_pdf->isOpen())
+    if (m_pdf && m_pdf->isOpen()) {
         m_thumbs->refreshPage(m_view->currentPage());
+        // Page count may have changed (insert/delete) — keep label in sync
+        if (m_pageTotalLabel)
+            m_pageTotalLabel->setText(QString("/ %1").arg(m_pdf->pageCount()));
+        if (m_statusPage)
+            m_statusPage->setText(tr("Page %1 / %2")
+                .arg(m_view->currentPage() + 1).arg(m_pdf->pageCount()));
+    }
 }
 
 void MainWindow::updateTitle() {
