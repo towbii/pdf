@@ -30,7 +30,7 @@ Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dep
 - **Insert blank page** — right-click in the thumbnail panel
 
 ### Viewing
-- **Real-time zoom slider** — instant live preview while dragging; snaps to 100% within ±4%
+- **Real-time zoom slider** — instant live preview while dragging; snaps to 100%
 - **Auto-center on zoom** — view stays locked on the same content while zooming in and out
 - **Text-aware scroll** — on open, automatically scrolls to the first line of text (not blank margins)
 - **Page thumbnails** — live sidebar that updates after every edit
