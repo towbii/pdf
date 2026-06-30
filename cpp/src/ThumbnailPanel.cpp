@@ -275,8 +275,7 @@ void ThumbnailPanel::endDrag(int dropPos) {
     m_dropIndicatorPos = -1;
 
     if (from >= 0 && dropPos >= 0 && dropPos != from && dropPos != from + 1) {
-        int to = (dropPos > from) ? dropPos - 1 : dropPos;
-        emit pageMoveRequested(from, to);
+        emit pageMoveRequested(from, dropPos);
     }
 }
 
