@@ -202,24 +202,9 @@ void PdfView::setTool(Tool t) {
 }
 
 void PdfView::updateSignatureCursor() {
-    if (m_sigPixmap.isNull()) {
-        for (auto *pw : m_pages) pw->setCursor(Qt::CrossCursor);
-        return;
-    }
-    // Show the signature itself as the cursor (max 64px wide for readability)
-    constexpr int MAX_CUR = 64;
-    QPixmap small = m_sigPixmap.width() > MAX_CUR
-                    ? m_sigPixmap.scaledToWidth(MAX_CUR, Qt::SmoothTransformation)
-                    : m_sigPixmap;
-    // Compose onto transparent background so ARGB is clean
-    QPixmap cur(small.size());
-    cur.fill(Qt::transparent);
-    QPainter pp(&cur);
-    pp.setOpacity(0.90);
-    pp.drawPixmap(0, 0, small);
-    pp.end();
-    QCursor sigCursor(cur, 0, cur.height() - 1); // hotspot at bottom-left
-    for (auto *pw : m_pages) pw->setCursor(sigCursor);
+    // The signature is shown as a ghost preview in paintEvent at the actual
+    // placement size — use a simple crosshair so it doesn't appear twice.
+    for (auto *pw : m_pages) pw->setCursor(Qt::CrossCursor);
 }
 
 void PdfView::refreshAll() {
