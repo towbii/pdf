@@ -3,4 +3,7 @@
     <qresource prefix="/i18n">
         <file>en.qm</file>
     </qresource>
+    <qresource prefix="/">
+        <file alias="PDFEditor.ico">../src/PDFEditor.ico</file>
+    </qresource>
 </RCC>
