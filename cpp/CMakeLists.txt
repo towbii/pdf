@@ -88,6 +88,19 @@ if(WIN32)
     target_link_libraries(PDFEditor PRIVATE
         User32 Gdi32 Shell32 Advapi32 Comdlg32 Ole32 OleAut32 Winspool Crypt32)
     qt_generate_deploy_app_script(TARGET PDFEditor
-        OUTPUT_SCRIPT deploy_script NO_TRANSLATIONS NO_COMPILER_RUNTIME)
+        OUTPUT_SCRIPT deploy_script NO_COMPILER_RUNTIME)
     install(SCRIPT ${deploy_script})
+
+    # Copy Qt6PrintSupport.dll next to the exe (windeployqt sometimes misses it)
+    find_file(QT_PRINTSUPPORT_DLL Qt6PrintSupport.dll
+        HINTS "${Qt6_DIR}/../../../bin"
+    )
+    if(QT_PRINTSUPPORT_DLL)
+        add_custom_command(TARGET PDFEditor POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${QT_PRINTSUPPORT_DLL}"
+                "$<TARGET_FILE_DIR:PDFEditor>/Qt6PrintSupport.dll"
+            COMMENT "Copying Qt6PrintSupport.dll"
+        )
+    endif()
 endif()
