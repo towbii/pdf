@@ -25,7 +25,7 @@ Run `PDFEditor-Setup.exe` and follow the wizard. No Qt, no Visual Studio, no dep
 - **Text** — click anywhere on the page to insert a text annotation; double-click an existing annotation to edit it
 - **Signatures** — create, save and reuse multiple signatures; drawn with the mouse or imported from a PNG/JPG
 - **Insert image** — insert a PNG/JPG/BMP file as a full-page image or place it on the current page
-- **Edit Text** — select any region of a scanned or native PDF to extract and edit its text: the original content is covered with a white rectangle, the recognised text is pre-filled in the editor so you can correct it and place it back on the page. Works on both native PDF text layers (instant) and true scanned images (via Tesseract OCR).
+- **Edit Text** — in Select mode, drag over any region to extract its text automatically (native PDF text layer first, Tesseract OCR as fallback for true scans). A small inline editor opens pre-filled with the recognised text — correct it and press Enter to place a new text annotation at that position. No separate tool needed.
 
 ### Moving and resizing annotations
 Click any annotation or inserted image in **Select mode** to show 8 resize handles:
@@ -73,7 +73,6 @@ Click any annotation or inserted image in **Select mode** to show 8 resize handl
 | `E` | Eraser tool |
 | `T` | Text tool |
 | `U` | Signature tool |
-| `X` | Edit Text tool (OCR) |
 | `Esc` | Back to Select |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |

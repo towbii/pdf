@@ -663,11 +663,6 @@ void MainWindow::buildToolbar() {
     tbTools->addAction(m_actSignature);
     connect(m_actSignature, &QAction::triggered, this, &MainWindow::openSignatureDialog);
 
-    m_actEditText = addTool(tr("Edit Text"), tr("Select a region to extract, cover and edit its text  [X]"), Tool::EditText);
-    connect(m_actEditText, &QAction::triggered, this, [this]() {
-        setActiveTool(Tool::EditText);
-        statusBar()->showMessage(tr("Edit Text: drag a rectangle around the text you want to edit"), 4000);
-    });
 
     m_actSelect->setChecked(true);
 
@@ -1483,7 +1478,6 @@ void MainWindow::keyPressEvent(QKeyEvent *ev) {
         case Qt::Key_E: setActiveTool(Tool::Eraser);    m_actEraser->setChecked(true);    return;
         case Qt::Key_T: setActiveTool(Tool::Text);      m_actText->setChecked(true);      return;
         case Qt::Key_U: openSignatureDialog();                                                       return;
-        case Qt::Key_X: setActiveTool(Tool::EditText);   m_actEditText->setChecked(true);           return;
         case Qt::Key_Escape: setActiveTool(Tool::Select); m_actSelect->setChecked(true);             return;
         default: break;
         }
@@ -1500,7 +1494,6 @@ void MainWindow::setActiveTool(Tool t) {
     m_actEraser->setChecked(t == Tool::Eraser);
     m_actText->setChecked(t == Tool::Text);
     m_actSignature->setChecked(t == Tool::Signature);
-    m_actEditText->setChecked(t == Tool::EditText);
 }
 
 void MainWindow::setModified(bool m) {
